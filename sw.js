@@ -2,7 +2,7 @@
    Strategy: pre-cache the shell; cache-first for shell assets;
    video clips are NETWORK ONLY (too large to pre-cache; brief allows it). */
 
-const CACHE_NAME = 'lt-shell-v2';
+const CACHE_NAME = 'lt-shell-v3';
 
 const SHELL = [
   './',

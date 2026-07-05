@@ -29,7 +29,7 @@
       "required_callout": "Skimmer Ready",
       "callout_keywords": ["skimmer", "ready"],
       "critical_prerequisites": [],
-      "video": null,
+      "video": "clips/S01.mp4",
       "failure_note": null
     },
     {
@@ -42,7 +42,7 @@
       "required_callout": "Attachments Ready",
       "callout_keywords": ["attachments", "ready"],
       "critical_prerequisites": [],
-      "video": null,
+      "video": "clips/S02.mp4",
       "failure_note": null
     },
     {
