@@ -18,6 +18,7 @@
     "Water level is at or above the skimmer midpoint"
   ],
   "interruption_threshold_minutes": 30,
+  "voice_window_seconds": 15,
   "steps": [
     {
       "step_id": "S01",

@@ -187,13 +187,15 @@ export async function runSession(ctx, resumeState = null) {
       await speak(text);
       await ledger.append('step_spoken', { session_id: sessionId, step_id: step.step_id });
     };
-    document.getElementById('btn-replay').addEventListener('click', () => {
-      if (listener) listener.suspend();
-      speakStep().then(() => { if (listener) listener.resume(); });
-    });
-
     let listener = null;
     let pauseRequested = null; // set by pause button while a stage is running
+    let rearmVoiceWindow = () => {}; // assigned in stage 2 while a voice window exists
+
+    document.getElementById('btn-replay').addEventListener('click', () => {
+      if (listener) listener.suspend();
+      rearmVoiceWindow(); // operator asked to hear it again — give a fresh window
+      speakStep().then(() => { if (listener) { listener.resume(); rearmVoiceWindow(); } });
+    });
 
     const onPauseClick = () => { pauseRequested = true; if (listener) listener.stop(); stopSpeaking(); };
     pauseBtn.onclick = onPauseClick;
@@ -238,7 +240,12 @@ export async function runSession(ctx, resumeState = null) {
       confirmArea.innerHTML = '';
     }
 
-    /* ----- stage 2: execution confirmation — voice with tap fallback ----- */
+    /* ----- stage 2: execution confirmation — one spoken request, then a timed
+       voice window; when it closes, press-and-hold is the only confirmation.
+       The app never speaks again on its own: long steps (e.g. S07) proceed at
+       the operator's discretion without audible interruptions. ----- */
+    const voiceWindowS = kc.voice_window_seconds || 15;
+
     const result = await new Promise((resolve) => {
       const status = document.createElement('div');
       status.className = 'voice-status';
@@ -258,41 +265,89 @@ export async function runSession(ctx, resumeState = null) {
       }
 
       let done = false;
+      let deadline = 0;
+      let tickIv = null;
+
+      function stopCountdown() {
+        if (tickIv) { clearInterval(tickIv); tickIv = null; }
+      }
       function finish(r) {
         if (done) return;
         done = true;
         if (listener) { listener.stop(); listener = null; }
+        stopCountdown();
         clearInterval(iv);
         resolve(r);
       }
 
       const iv = setInterval(() => {
-        if (pauseRequested && !done) { done = true; if (listener) { listener.stop(); listener = null; } clearInterval(iv); resolve({ paused: true }); }
+        if (pauseRequested && !done) {
+          done = true;
+          if (listener) { listener.stop(); listener = null; }
+          stopCountdown();
+          clearInterval(iv);
+          resolve({ paused: true });
+        }
       }, 200);
 
+      const showHoldOnly = (msg) => {
+        status.classList.remove('listening');
+        statusText.textContent = msg;
+      };
+
+      const closeVoiceWindow = () => {
+        if (done || !listener) return;
+        listener.stop();
+        listener = null;
+        stopCountdown();
+        showHoldOnly('Voice window closed — press and hold to confirm when ready.');
+        ledger.append('voice_window_closed', {
+          session_id: sessionId, step_id: step.step_id,
+          detail: { window_seconds: voiceWindowS }
+        });
+      };
+
+      const renderCountdown = () => {
+        if (done || !listener) return;
+        const left = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+        statusText.innerHTML = `Listening for callout: <span class="callout-want">“${step.required_callout}”</span> · voice closes in ${left}s`;
+        if (left <= 0) closeVoiceWindow();
+      };
+
+      /* Start/restart the voice window. Re-armed only by the operator's own
+         REPLAY INSTRUCTION tap — the app itself never extends or repeats. */
+      rearmVoiceWindow = () => {
+        if (done || !listener) return;
+        deadline = Date.now() + voiceWindowS * 1000;
+        if (!tickIv) tickIv = setInterval(renderCountdown, 250);
+        renderCountdown();
+      };
+
       if (voiceSupported() && navigator.onLine) {
+        let armed = false;
         listener = new VoiceListener(step.callout_keywords, {
           onMatch: (transcript) => finish({ method: 'voice', detail: { transcript } }),
-          onReject: async (transcript) => {
-            await ledger.append('callout_rejected', {
+          onReject: (transcript) => {
+            // Logged for the record, but silent: one spoken request per step,
+            // no talk-back while the operator works.
+            ledger.append('callout_rejected', {
               session_id: sessionId, step_id: step.step_id, method: 'voice',
               detail: { heard: transcript, required: step.required_callout }
             });
-            statusText.innerHTML = `Standing by for callout: <span class="callout-want">“${step.required_callout}”</span>`;
-            listener.suspend();
-            await speak(`Confirming we heard the required callout. Say: ${step.required_callout}.`);
-            if (listener) listener.resume();
           },
           onUnavailable: (reason) => {
             const why = reason === 'mic-denied' ? 'Microphone unavailable'
               : reason === 'offline' ? 'Voice needs a network connection'
               : 'Voice not supported on this device';
-            statusText.textContent = `${why} — confirm with the hold button below.`;
-            status.classList.remove('listening');
+            listener = null;
+            stopCountdown();
+            showHoldOnly(`${why} — confirm with the hold button below.`);
           },
           onStateChange: (on) => {
             status.classList.toggle('listening', on);
-            if (on) statusText.innerHTML = `Listening for callout: <span class="callout-want">“${step.required_callout}”</span>`;
+            // The window starts when the mic is actually live for the first
+            // time, so a permission prompt doesn't eat into the 15 seconds.
+            if (on && !armed) { armed = true; rearmVoiceWindow(); }
           }
         });
         listener.start();
