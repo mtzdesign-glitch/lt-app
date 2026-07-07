@@ -58,11 +58,9 @@ export async function runGates(ctx) {
       hold.onComplete(() => resolve(true));
       actions.appendChild(hold.el);
 
-      const missing = document.createElement('button');
-      missing.className = 'btn btn-danger-ghost';
-      missing.textContent = 'LABEL MISSING OR DOES NOT MATCH';
-      missing.addEventListener('click', () => resolve(false));
-      actions.appendChild(missing);
+      const missing = ui.holdButton('LABEL MISSING OR DOES NOT MATCH', 'press and hold — ends the session', 'danger');
+      missing.onComplete(() => resolve(false));
+      actions.appendChild(missing.el);
     });
 
     if (ok) {
@@ -105,11 +103,9 @@ export async function runGates(ctx) {
         actions.appendChild(na);
       }
 
-      const decline = document.createElement('button');
-      decline.className = 'btn btn-danger-ghost';
-      decline.textContent = 'I CANNOT CONFIRM THIS';
-      decline.addEventListener('click', () => resolve('decline'));
-      actions.appendChild(decline);
+      const decline = ui.holdButton('I CANNOT CONFIRM THIS', 'press and hold — ends the session', 'danger');
+      decline.onComplete(() => resolve('decline'));
+      actions.appendChild(decline.el);
     });
 
     if (choice === 'decline') {
@@ -168,11 +164,9 @@ export async function runGates(ctx) {
       confirmBtn.onComplete(() => resolve(true));
       actions.appendChild(confirmBtn.el);
 
-      const notMet = document.createElement('button');
-      notMet.className = 'btn btn-danger-ghost';
-      notMet.textContent = 'CONDITION NOT MET';
-      notMet.addEventListener('click', () => resolve(false));
-      actions.appendChild(notMet);
+      const notMet = ui.holdButton('CONDITION NOT MET', 'press and hold — ends the session', 'danger');
+      notMet.onComplete(() => resolve(false));
+      actions.appendChild(notMet.el);
     });
 
     if (!ok) {

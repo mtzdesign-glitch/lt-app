@@ -16,10 +16,11 @@ function show(screenId) {
   window.scrollTo(0, 0);
 }
 
-/* Hold-to-confirm button: press and hold 1.5 s. Prevents accidental taps. */
-function holdButton(label, hint, warn = false) {
+/* Hold-to-confirm button: press and hold 1.5 s. Prevents accidental taps.
+   variant: false = green confirm, true = amber critical, 'danger' = red decline/abort */
+function holdButton(label, hint, variant = false) {
   const el = document.createElement('button');
-  el.className = 'hold-btn' + (warn ? ' warn' : '');
+  el.className = 'hold-btn' + (variant === 'danger' ? ' danger' : variant ? ' warn' : '');
   el.innerHTML = `
     <span class="hold-fill"></span>
     <span class="hold-label">${label}</span>
