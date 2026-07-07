@@ -310,7 +310,7 @@ export async function runSession(ctx, resumeState = null) {
       const renderCountdown = () => {
         if (done || !listener) return;
         const left = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
-        statusText.innerHTML = `Listening for callout: <span class="callout-want">“${step.required_callout}”</span> · voice closes in ${left}s`;
+        statusText.innerHTML = `Listening for callout: <span class="callout-want">“${step.required_callout}”</span> · voice closes in <span class="countdown-num">${left}</span>s`;
         if (left <= 0) closeVoiceWindow();
       };
 

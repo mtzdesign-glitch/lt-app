@@ -235,6 +235,7 @@ html, body {
 .voice-status.listening .mic-dot { background: var(--danger); animation: pulse 1.2s infinite; }
 @keyframes pulse { 50% { opacity: 0.35; } }
 .callout-want { color: var(--accent); font-weight: 700; }
+.countdown-num { font-size: 2em; font-weight: 700; color: var(--ok); line-height: 1; }
 
 /* decision */
 .decision-block { display: flex; flex-direction: column; gap: 14px; }
