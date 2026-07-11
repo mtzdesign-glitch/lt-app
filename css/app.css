@@ -105,6 +105,105 @@ html, body {
 }
 .no-video { margin-top: 10px; color: var(--text-dim); font-size: 0.8rem; font-style: italic; }
 
+/* ---------- auth / profile / library ---------- */
+.auth-wrap {
+  display: flex; flex-direction: column; gap: 14px;
+  max-width: 420px; width: 100%; align-self: center; padding-bottom: 24px;
+}
+.auth-wrap h2 { font-size: 1.1rem; letter-spacing: 0.1em; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label { font-size: 0.8rem; color: var(--text-dim); letter-spacing: 0.08em; }
+.field input {
+  padding: 14px; font: inherit; font-size: 1.05rem;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--line); border-radius: 10px;
+}
+.field input:focus { outline: 2px solid var(--accent); }
+/* The login screen must fit a phone without scrolling: compress the big
+   home-style header so the mode-toggle button stays on screen. */
+#screen-auth .home-header { padding: 4vh 0 3vh; }
+#screen-auth .app-title { font-size: 2.6rem; }
+
+.pw-row { display: flex; gap: 8px; }
+.pw-row input { flex: 1; min-width: 0; }
+.pw-toggle {
+  flex: none; padding: 0 16px; font: inherit; font-size: 0.78rem; font-weight: 700;
+  letter-spacing: 0.08em; color: var(--text-dim);
+  background: var(--bg-card); border: 1px solid var(--line); border-radius: 10px;
+}
+.auth-divider {
+  text-align: center; color: var(--text-dim); font-size: 0.8rem; letter-spacing: 0.08em;
+  display: flex; align-items: center; gap: 12px;
+}
+.auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.label-hint { font-weight: 400; text-transform: none; letter-spacing: 0; }
+.auth-msg { min-height: 1.4em; font-size: 0.9rem; color: var(--text-dim); }
+.auth-msg.bad { color: var(--danger); }
+.auth-msg.ok { color: var(--ok); }
+
+.screen-sub { color: var(--text-dim); font-size: 0.9rem; padding-bottom: 12px; }
+.offline-note {
+  background: rgba(255, 193, 7, 0.08); border-left: 3px solid var(--warn);
+  padding: 10px 12px; font-size: 0.85rem; border-radius: 0 8px 8px 0; margin-bottom: 12px;
+}
+.profile-list { display: flex; flex-direction: column; gap: 10px; padding-bottom: 18px; }
+.profile-row { display: flex; gap: 8px; }
+.profile-row .btn:first-child { flex: 1; min-width: 0; }
+.row-edit { width: auto; flex: none; padding: 10px 16px; font-size: 1rem; }
+#profile-enterprise { display: flex; align-items: center; gap: 10px; }
+.stack-actions { display: flex; flex-direction: column; gap: 10px; padding-bottom: 24px; margin-top: auto; }
+
+.kc-list { display: flex; flex-direction: column; gap: 10px; padding-bottom: 18px; }
+.kc-card {
+  background: var(--bg-card); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 16px; cursor: pointer;
+}
+.kc-card:active { filter: brightness(1.25); }
+.kc-card h3 { font-size: 1.1rem; margin-bottom: 4px; }
+.kc-card .kc-meta { color: var(--text-dim); font-size: 0.82rem; }
+.card-row { display: flex; align-items: center; gap: 12px; }
+.card-row .card-main { flex: 1; min-width: 0; }
+.card-row .card-edit {
+  flex: none; color: var(--accent); border: 1px solid var(--accent-dim);
+  border-radius: 8px; padding: 6px 10px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em;
+}
+.kc-type-tag {
+  display: inline-block; font-size: 0.68rem; letter-spacing: 0.1em; font-weight: 700;
+  color: var(--accent); border: 1px solid var(--accent-dim);
+  border-radius: 6px; padding: 2px 8px; margin-bottom: 8px;
+}
+
+/* ---------- step builder ---------- */
+.builder-body { display: flex; flex-direction: column; gap: 14px; padding-bottom: 24px; }
+.builder-list { display: flex; flex-direction: column; gap: 10px; }
+textarea {
+  width: 100%; padding: 14px; font: inherit; font-size: 1rem;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--line); border-radius: 10px; resize: vertical;
+}
+textarea:focus { outline: 2px solid var(--accent); }
+.eq-thumb { width: 100%; max-height: 220px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
+.video-note { color: var(--text-dim); font-size: 0.85rem; }
+.radio-item {
+  display: flex; gap: 12px; align-items: center;
+  background: var(--bg-card); border: 1px solid var(--line);
+  border-radius: 10px; padding: 12px 14px; cursor: pointer;
+}
+.radio-item input { width: 24px; height: 24px; accent-color: var(--accent); flex: none; }
+
+.capture-overlay {
+  position: fixed; inset: 0; background: #000; z-index: 60;
+  display: flex; flex-direction: column;
+}
+.capture-overlay video { flex: 1; width: 100%; min-height: 0; object-fit: contain; background: #000; }
+.rec-timer {
+  text-align: center; color: #fff; font-weight: 700; padding: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.rec-timer.rec { color: var(--danger); }
+.rec-controls { display: flex; gap: 10px; padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); }
+.rec-controls .btn { flex: 1; }
+
 /* ---------- gates ---------- */
 .gate-progress { display: flex; gap: 6px; padding-bottom: 16px; }
 .gate-progress .dot {
@@ -146,6 +245,19 @@ html, body {
   border-radius: var(--radius); padding: 18px; cursor: pointer;
 }
 .attest-check input { width: 24px; height: 24px; margin-top: 3px; flex: none; accent-color: var(--accent); }
+
+/* checkbox gate lists (Gate 0 labels, Gate 1 declarations) */
+.check-list { display: flex; flex-direction: column; gap: 10px; }
+.check-item {
+  display: flex; gap: 16px; align-items: center;
+  background: var(--bg-card); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 14px 16px; cursor: pointer;
+}
+.check-item input { width: 48px; height: 48px; flex: none; accent-color: var(--accent); }
+.check-item.checked { border-color: var(--ok); }
+.check-item .check-name { font-size: 1.2rem; font-weight: 800; letter-spacing: 0.08em; }
+.check-item .check-decl { font-size: 0.98rem; line-height: 1.5; }
+.na-active { border-color: var(--accent); color: var(--accent); }
 
 /* ---------- session (sterile) ---------- */
 .sterile { background: #05080c; }

@@ -5,6 +5,7 @@
 
 import { speak, stopSpeaking, voiceSupported, VoiceListener } from './speech.js';
 import { chooseClosureReason, appendSessionClosed } from './closure.js';
+import { mediaUrl } from './backend.js';
 
 const SNAPSHOT_KEY = 'lt_active_session';
 
@@ -43,6 +44,8 @@ export async function runSession(ctx, resumeState = null) {
 
   const state = resumeState || {
     session_id: ctx.sessionId,
+    kc_ref: ctx.kcRef || null,  // library identity of the KC this session runs on
+    kc_doc: kc,                 // full KC copy so a crash can resume the right procedure
     current: kc.steps[0].step_id,
     completed: [],            // [{step_id, title}] in confirmation order
     confirmations: { voice: 0, tap: 0 },
@@ -179,11 +182,25 @@ export async function runSession(ctx, resumeState = null) {
         ${step.failure_note ? `<div class="failure-note">${step.failure_note}</div>` : ''}
       </div>
       ${step.video ? `
-        <video class="step-video" src="${step.video}" preload="metadata" controls playsinline></video>
+        <video class="step-video" preload="metadata" controls playsinline></video>
       ` : ''}
       <button class="btn btn-replay" id="btn-replay">&#128266; REPLAY INSTRUCTION</button>
       <div id="confirm-area" style="display:flex;flex-direction:column;gap:14px;"></div>
     `;
+
+    if (step.video) {
+      const vidEl = body.querySelector('.step-video');
+      /* Bundled clips resolve to themselves; vault clips get a signed URL.
+         Offline vault clips degrade to a note — the step still runs. */
+      mediaUrl(step.video)
+        .then((u) => { vidEl.src = u; })
+        .catch(() => {
+          const note = document.createElement('div');
+          note.className = 'no-video';
+          note.textContent = 'Video unavailable offline — guided by text and voice.';
+          vidEl.replaceWith(note);
+        });
+    }
 
     const confirmArea = document.getElementById('confirm-area');
 

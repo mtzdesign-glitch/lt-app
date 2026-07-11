@@ -2,6 +2,8 @@
    Browsable library of ALL step clips — before, during (via pause), and outside
    sessions. No gates. Viewing a clip writes a review_view ledger event. */
 
+import { mediaUrl } from './backend.js';
+
 export function renderReview(ctx) {
   const { kc, ledger } = ctx;
   const list = document.getElementById('review-list');
@@ -22,12 +24,23 @@ export function renderReview(ctx) {
 
     if (step.video) {
       const video = document.createElement('video');
-      video.src = step.video;
+      if (step.video.startsWith('vault:')) {
+        /* cloud-stored clip: resolve a signed URL; offline → note instead */
+        mediaUrl(step.video)
+          .then((u) => { video.src = u; })
+          .catch(() => {
+            const note = document.createElement('div');
+            note.className = 'no-video';
+            note.textContent = 'Video unavailable offline — it will play when connected.';
+            video.replaceWith(note);
+          });
+      } else {
+        video.src = step.video;
+        video.poster = step.video.replace('clips/', 'clips/thumbs/').replace('.mp4', '.jpg');
+      }
       video.controls = true;
       video.playsInline = true;
       video.preload = 'none';
-      const poster = step.video.replace('clips/', 'clips/thumbs/').replace('.mp4', '.jpg');
-      video.poster = poster;
 
       let loggedThisPlay = false;
       video.addEventListener('play', () => {

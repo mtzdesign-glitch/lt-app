@@ -13,8 +13,73 @@
 </head>
 <body>
 
-  <!-- ============ HOME ============ -->
+  <!-- ============ ENTERPRISE LOGIN ============ -->
+  <section id="screen-auth" class="screen">
+    <header class="home-header">
+      <h1 class="app-title">LT</h1>
+      <div class="app-version" id="auth-version"></div>
+    </header>
+    <div class="auth-wrap">
+      <h2 id="auth-heading">ENTERPRISE LOGIN</h2>
+      <button id="btn-auth-google" class="btn btn-secondary btn-big">CONTINUE WITH GOOGLE</button>
+      <div class="auth-divider">or use email</div>
+      <div class="field" id="auth-entname-field" hidden>
+        <label for="auth-entname">Enterprise name</label>
+        <input id="auth-entname" type="text" autocomplete="organization">
+      </div>
+      <div class="field">
+        <label for="auth-email">Email</label>
+        <input id="auth-email" type="email" autocomplete="email">
+      </div>
+      <div class="field">
+        <label for="auth-password">Password <span class="label-hint">(at least 6 characters)</span></label>
+        <div class="pw-row">
+          <input id="auth-password" type="password" minlength="6" autocomplete="current-password">
+          <button id="btn-pw-toggle" type="button" class="pw-toggle">SHOW</button>
+        </div>
+      </div>
+      <div id="auth-msg" class="auth-msg"></div>
+      <button id="btn-auth-submit" class="btn btn-primary btn-big">LOG IN</button>
+      <button id="btn-auth-toggle" class="btn btn-secondary">NEW HERE? CREATE AN ENTERPRISE ACCOUNT</button>
+    </div>
+  </section>
+
+  <!-- ============ PROFILE PICKER ============ -->
+  <section id="screen-profile" class="screen">
+    <header class="bar"><h2>WHO IS WORKING?</h2></header>
+    <div class="screen-sub" id="profile-enterprise"></div>
+    <div id="profile-offline" class="offline-note" hidden>Offline — showing the last saved profiles.</div>
+    <div id="profile-list" class="profile-list"></div>
+    <div class="stack-actions">
+      <button id="btn-new-profile" class="btn btn-secondary btn-big">+ NEW PROFILE</button>
+      <button id="btn-logout" class="btn btn-tertiary">LOG OUT</button>
+    </div>
+  </section>
+
+  <!-- ============ KC LIBRARY ============ -->
+  <section id="screen-library" class="screen">
+    <header class="bar">
+      <button id="btn-switch-profile" class="btn btn-back">&#8592; PROFILE</button>
+      <h2>KC LIBRARY</h2>
+    </header>
+    <div class="screen-sub" id="library-sub"></div>
+    <div id="library-offline" class="offline-note" hidden>Offline — showing the last saved copy of the library.</div>
+    <div id="kc-list" class="kc-list"></div>
+    <div class="stack-actions">
+      <div class="screen-sub" style="padding-bottom:0;">Create a new KC:</div>
+      <button id="btn-new-procedure" class="btn btn-primary">+ PROCEDURE KC</button>
+      <button id="btn-new-dangerous" class="btn btn-primary">+ DANGEROUS EQUIPMENT / SYSTEMS KC</button>
+      <button id="btn-new-product" class="btn btn-primary">+ PRODUCT MANUAL KC</button>
+      <button id="btn-import-sample" class="btn btn-secondary">ADD SAMPLE KC — POOL CLEANING</button>
+      <button id="btn-ledger" class="btn btn-tertiary">SESSION LEDGER</button>
+    </div>
+  </section>
+
+  <!-- ============ KC HOME ============ -->
   <section id="screen-home" class="screen">
+    <header class="bar">
+      <button id="btn-back-library" class="btn btn-back">&#8592; LIBRARY</button>
+    </header>
     <header class="home-header">
       <h1 class="app-title">LT</h1>
       <div class="app-version" id="app-version">v0.1.0</div>
@@ -23,9 +88,21 @@
     <div class="home-actions">
       <button id="btn-start-session" class="btn btn-primary btn-big">START SESSION</button>
       <button id="btn-review-mode" class="btn btn-secondary btn-big">REVIEW MODE</button>
-      <button id="btn-ledger" class="btn btn-tertiary">SESSION LEDGER</button>
+      <button id="btn-build-steps" class="btn btn-secondary">BUILD STEPS</button>
+      <button id="btn-rename-kc" class="btn btn-tertiary">RENAME THIS KC</button>
+      <button id="btn-delete-kc" class="btn btn-danger-ghost">DELETE THIS KC</button>
     </div>
     <footer class="home-footer" id="home-status"></footer>
+  </section>
+
+  <!-- ============ STEP BUILDER ============ -->
+  <section id="screen-builder" class="screen">
+    <header class="bar">
+      <button id="btn-builder-done" class="btn btn-back">&#8592; DONE</button>
+      <h2>STEP BUILDER</h2>
+    </header>
+    <div id="builder-sync" class="screen-sub"></div>
+    <div id="builder-body" class="builder-body"></div>
   </section>
 
   <!-- ============ REVIEW MODE ============ -->
@@ -113,6 +190,7 @@
     </div>
   </div>
 
+  <script src="js/vendor/supabase.js"></script>
   <script type="module" src="js/app.js"></script>
 </body>
 </html>

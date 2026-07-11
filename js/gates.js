@@ -1,6 +1,6 @@
 /* LT v0.1 — Pre-Session Gate Sequence (strict order; KC steps stay hidden until all pass)
-   Gate 0 — Equipment Label Confirmation (type each label exactly; 3 mismatches = blocked)
-   Gate 1 — Fitness-for-Use Declaration (4 confirmations; any decline blocks)
+   Gate 0 — Equipment Label Confirmation (one checklist screen; all boxes + one hold to confirm)
+   Gate 1 — Fitness-for-Use Declaration (one checklist screen; all boxes + one hold to confirm)
    Gate 2 — TECH Authorization attestation
    Gate 3 — Equipment Baseline State Checklist */
 
@@ -40,98 +40,156 @@ export async function runGates(ctx) {
   setProgress(0);
   title.textContent = 'GATE 0 — EQUIPMENT LABELS';
 
-  for (let i = 0; i < kc.equipment_labels.length; i++) {
-    const label = kc.equipment_labels[i];
-    const ok = await new Promise((resolve) => {
-      body.innerHTML = `
-        <div class="gate-heading">Equipment label check ${i + 1} of ${kc.equipment_labels.length}</div>
-        <div class="gate-sub">Locate this item and read its physical label. Confirming the label matches puts you at the right equipment.</div>
-        <div class="label-card">
-          <div class="label-prompt">Find the physical label:</div>
-          <div class="label-name">${label}</div>
-        </div>
-        <div id="label-actions" style="display:flex;flex-direction:column;gap:10px;"></div>
+  /* KCs authored with no equipment have nothing to verify here; the session
+     then enters the ledger at the first fitness confirmation instead. */
+  const gate0 = kc.equipment_labels.length === 0 ? { ok: true } : await new Promise((resolve) => {
+    body.innerHTML = `
+      <div class="gate-heading">Equipment label check</div>
+      <div class="gate-sub">Locate each item and read its physical label. Check off each label once you have confirmed it at the equipment. All labels must be checked to proceed.</div>
+      <div class="check-list" id="label-list"></div>
+      <div class="decl-actions" id="label-actions"></div>
+    `;
+    const list = document.getElementById('label-list');
+    const actions = document.getElementById('label-actions');
+
+    kc.equipment_labels.forEach((label) => {
+      const item = document.createElement('label');
+      item.className = 'check-item';
+      item.innerHTML = `
+        <input type="checkbox">
+        <span class="check-name">${label}</span>
       `;
-      const actions = document.getElementById('label-actions');
-
-      const hold = ui.holdButton(`LABEL CONFIRMED: ${label}`, 'press and hold');
-      hold.onComplete(() => resolve(true));
-      actions.appendChild(hold.el);
-
-      const missing = ui.holdButton('LABEL MISSING OR DOES NOT MATCH', 'press and hold — ends the session', 'danger');
-      missing.onComplete(() => resolve(false));
-      actions.appendChild(missing.el);
+      list.appendChild(item);
     });
+    const boxes = () => [...list.querySelectorAll('input')];
 
-    if (ok) {
-      /* The first successful label confirmation is the session's first ledger
-         entry — it carries the session context that session_start used to. */
+    const hold = ui.holdButton('ALL LABELS CONFIRMED', 'press and hold');
+    hold.setDisabled(true);
+    hold.onComplete(() => resolve({ ok: true }));
+    actions.appendChild(hold.el);
+
+    const missing = ui.holdButton('LABEL MISSING OR DOES NOT MATCH', 'press and hold — ends the session', 'danger');
+    missing.onComplete(() => resolve({
+      ok: false,
+      unchecked: kc.equipment_labels.filter((_, i) => !boxes()[i].checked)
+    }));
+    actions.appendChild(missing.el);
+
+    list.addEventListener('change', () => {
+      boxes().forEach((b) => b.closest('.check-item').classList.toggle('checked', b.checked));
+      hold.setDisabled(!boxes().every((b) => b.checked));
+    });
+  });
+
+  if (gate0.ok) {
+    /* The first label confirmation is the session's first ledger entry —
+       it carries the session context that session_start used to. */
+    for (const label of kc.equipment_labels) {
       const detail = ctx.sessionLogged
         ? { label }
         : {
             label,
-            session_context: { kc_id: kc.kc_id, kc_version: kc.kc_version, app_version: ctx.appVersion }
+            session_context: {
+              kc_id: kc.kc_id, kc_version: kc.kc_version, app_version: ctx.appVersion,
+              kc_db_id: ctx.kcRef ? ctx.kcRef.id : null,
+              profile: ctx.profileName || null
+            }
           };
       await ledger.append('gate_label_confirm', { session_id: sessionId, method: 'tap', detail });
       ctx.sessionLogged = true;
-    } else if (!ctx.sessionLogged) {
-      /* No label was ever confirmed: the session never entered the ledger,
-         so there is nothing to record and nothing to close out. */
-      return { passed: false, reason: `The label "${label}" could not be confirmed at the equipment. Verify you are at the correct equipment, then start a new session.` };
-    } else {
-      await ledger.append('gate_label_mismatch', { session_id: sessionId, detail: { label, reason: 'label missing or does not match' } });
-      await ledger.append('gate_declined', {
-        session_id: sessionId,
-        detail: { gate: 0, reason: `Equipment label not confirmed: ${label}` }
-      });
-      return { passed: false, reason: `The label "${label}" could not be confirmed at the equipment. Verify you are at the correct equipment, then start a new session.` };
     }
+  } else {
+    /* No label was confirmed: the session never entered the ledger,
+       so there is nothing to record and nothing to close out. */
+    const which = gate0.unchecked.length ? gate0.unchecked.join(', ') : 'one or more labels';
+    return { passed: false, reason: `Labels could not be confirmed at the equipment: ${which}. Verify you are at the correct equipment, then start a new session.` };
   }
 
   /* ---------------- Gate 1: Fitness-for-Use Declaration ---------------- */
   setProgress(1);
   title.textContent = 'GATE 1 — FITNESS FOR USE';
 
-  for (let i = 0; i < FITNESS_DECLARATIONS.length; i++) {
-    const text = FITNESS_DECLARATIONS[i];
-    const isLast = i === 3;
+  const gate1 = await new Promise((resolve) => {
+    body.innerHTML = `
+      <div class="gate-heading">Fitness-for-use declarations</div>
+      <div class="gate-sub">Read each declaration and check it to confirm. All declarations must be checked to proceed.</div>
+      <div class="check-list" id="decl-list"></div>
+      <div class="decl-actions" id="decl-actions"></div>
+    `;
+    const list = document.getElementById('decl-list');
+    const actions = document.getElementById('decl-actions');
 
-    const choice = await new Promise((resolve) => {
-      body.innerHTML = `
-        <div class="gate-heading">Declaration ${i + 1} of 4</div>
-        <div class="decl-card">${text}</div>
-        <div class="decl-actions" id="decl-actions"></div>
+    FITNESS_DECLARATIONS.forEach((text) => {
+      const item = document.createElement('label');
+      item.className = 'check-item';
+      item.innerHTML = `
+        <input type="checkbox">
+        <span class="check-decl">${text}</span>
       `;
-      const actions = document.getElementById('decl-actions');
-
-      const confirmBtn = ui.holdButton('I CONFIRM', 'press and hold');
-      confirmBtn.onComplete(() => resolve('confirm'));
-      actions.appendChild(confirmBtn.el);
-
-      if (isLast) {
-        const na = document.createElement('button');
-        na.className = 'btn btn-secondary';
-        na.textContent = 'NOT APPLICABLE — STANDARD OPERATION';
-        na.addEventListener('click', () => resolve('na'));
-        actions.appendChild(na);
-      }
-
-      const decline = ui.holdButton('I CANNOT CONFIRM THIS', 'press and hold — ends the session', 'danger');
-      decline.onComplete(() => resolve('decline'));
-      actions.appendChild(decline.el);
+      list.appendChild(item);
     });
+    const boxes = () => [...list.querySelectorAll('input')];
 
-    if (choice === 'decline') {
+    /* Declaration 4 only applies to repair/diagnostic sessions; the N/A toggle
+       checks its box and records the response as not-applicable. */
+    let lastIsNa = false;
+    const na = document.createElement('button');
+    na.className = 'btn btn-secondary';
+    na.textContent = 'DECLARATION 4 NOT APPLICABLE — STANDARD OPERATION';
+    list.appendChild(na);
+
+    const hold = ui.holdButton('I CONFIRM ALL DECLARATIONS', 'press and hold');
+    hold.setDisabled(true);
+    hold.onComplete(() => resolve({ ok: true, lastIsNa }));
+    actions.appendChild(hold.el);
+
+    const decline = ui.holdButton('I CANNOT CONFIRM THIS', 'press and hold — ends the session', 'danger');
+    decline.onComplete(() => resolve({
+      ok: false,
+      unchecked: FITNESS_DECLARATIONS.map((_, i) => i + 1).filter((n) => !boxes()[n - 1].checked)
+    }));
+    actions.appendChild(decline.el);
+
+    function sync() {
+      boxes().forEach((b) => b.closest('.check-item').classList.toggle('checked', b.checked));
+      hold.setDisabled(!boxes().every((b) => b.checked));
+    }
+    na.addEventListener('click', () => {
+      lastIsNa = !lastIsNa;
+      boxes()[3].checked = lastIsNa;
+      na.classList.toggle('na-active', lastIsNa);
+      sync();
+    });
+    list.addEventListener('change', (e) => {
+      if (e.target === boxes()[3]) { lastIsNa = false; na.classList.remove('na-active'); }
+      sync();
+    });
+  });
+
+  if (!gate1.ok) {
+    /* If nothing has entered the ledger yet (no-equipment KC), a decline here
+       leaves no trace — same semantics as declining the first label. */
+    if (ctx.sessionLogged) {
       await ledger.append('gate_declined', {
         session_id: sessionId,
-        detail: { gate: 1, declaration: i + 1, reason: 'Fitness declaration declined' }
+        detail: { gate: 1, declarations_unconfirmed: gate1.unchecked, reason: 'Fitness declaration declined' }
       });
-      return { passed: false, reason: 'A fitness-for-use declaration could not be confirmed. The equipment must be cleared through your organization before a session can begin.' };
     }
-    await ledger.append('gate_fitness_confirm', {
-      session_id: sessionId,
-      detail: { declaration: i + 1, response: choice === 'na' ? 'not_applicable_standard_operation' : 'confirmed' }
-    });
+    return { passed: false, reason: 'A fitness-for-use declaration could not be confirmed. The equipment must be cleared through your organization before a session can begin.' };
+  }
+  for (let i = 0; i < FITNESS_DECLARATIONS.length; i++) {
+    const detail = { declaration: i + 1, response: i === 3 && gate1.lastIsNa ? 'not_applicable_standard_operation' : 'confirmed' };
+    if (!ctx.sessionLogged) {
+      /* No-equipment KC: the session's first ledger entry is this confirm,
+         so it carries the session context instead of a label confirm. */
+      detail.session_context = {
+        kc_id: kc.kc_id, kc_version: kc.kc_version, app_version: ctx.appVersion,
+        kc_db_id: ctx.kcRef ? ctx.kcRef.id : null,
+        profile: ctx.profileName || null
+      };
+    }
+    await ledger.append('gate_fitness_confirm', { session_id: sessionId, detail });
+    ctx.sessionLogged = true;
   }
 
   /* ---------------- Gate 2: TECH Authorization ---------------- */

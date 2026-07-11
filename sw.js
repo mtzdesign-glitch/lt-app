@@ -2,13 +2,17 @@
    Strategy: pre-cache the shell; cache-first for shell assets;
    video clips are NETWORK ONLY (too large to pre-cache; brief allows it). */
 
-const CACHE_NAME = 'lt-shell-v8';
+const CACHE_NAME = 'lt-shell-v16';
 
 const SHELL = [
   './',
   './index.html',
   './css/app.css',
   './js/app.js',
+  './js/backend.js',
+  './js/sync.js',
+  './js/builder.js',
+  './js/vendor/supabase.js',
   './js/ledger.js',
   './js/speech.js',
   './js/gates.js',
@@ -38,6 +42,9 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
+
+  // Supabase (auth, database, video storage): network only, never cached here.
+  if (url.origin !== self.location.origin) return;
 
   // Videos: pass straight to network (supports range requests for seeking).
   if (url.pathname.includes('/clips/')) return;
