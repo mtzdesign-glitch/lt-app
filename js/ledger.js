@@ -8,10 +8,12 @@ const STORE_KEY = 'lt_ledger_v1';
 
 /* Events that end a session's lifecycle. session_abandoned and
    session_restart_forced are no longer written (v0.2+) but remain terminal so
-   sessions in pre-existing ledgers do not read as still open. */
+   sessions in pre-existing ledgers do not read as still open. session_aborted
+   (v0.6+) is the safety-halt terminal: the session can never resume. */
 const TERMINAL_EVENTS = new Set([
   'session_complete',
   'session_closed',
+  'session_aborted',
   'session_abandoned',
   'session_restart_forced'
 ]);
@@ -167,6 +169,7 @@ export class Ledger {
       const last = list[list.length - 1];
       const confirms = list.filter((e) => e.event_type === 'step_confirmed');
       const closedEv = list.filter((e) => e.event_type === 'session_closed').pop();
+      const abortEv = list.filter((e) => e.event_type === 'session_aborted').pop();
       out.push({
         session_id: id,
         started: first.timestamp_iso,
@@ -178,7 +181,9 @@ export class Ledger {
         interruptions: list.filter((e) => e.event_type === 'interruption_start').length,
         completed: list.some((e) => e.event_type === 'session_complete'),
         blocked: list.some((e) => e.event_type === 'gate_declined'),
-        closed_reason: closedEv && closedEv.detail ? closedEv.detail.reason : null
+        closed_reason: closedEv && closedEv.detail ? closedEv.detail.reason : null,
+        aborted_reason: abortEv && abortEv.detail
+          ? (abortEv.detail.reason_label || abortEv.detail.reason_code) : null
       });
     }
     return out.reverse(); // newest first

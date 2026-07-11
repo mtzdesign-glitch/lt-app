@@ -4,7 +4,8 @@
    frames verification as the system doing its job — never doubt of the TECH. */
 
 import { speak, stopSpeaking, voiceSupported, VoiceListener } from './speech.js';
-import { chooseClosureReason, appendSessionClosed } from './closure.js';
+import { chooseClosureReason, appendSessionClosed, abortReasonsFor, appendSessionAborted } from './closure.js';
+import { sevOf, SEVERITY_BADGE } from './severity.js';
 import { mediaUrl } from './backend.js';
 
 const SNAPSHOT_KEY = 'lt_active_session';
@@ -61,6 +62,8 @@ export async function runSession(ctx, resumeState = null) {
   const body = document.getElementById('session-body');
   const progressEl = document.getElementById('session-progress');
   const pauseBtn = document.getElementById('btn-pause');
+  const abortBtn = document.getElementById('btn-abort');
+  const kcType = kc.kc_type || (ctx.kcRef ? ctx.kcRef.kc_type : null);
 
   let wakeLock = null;
   let sessionLive = true;
@@ -93,11 +96,14 @@ export async function runSession(ctx, resumeState = null) {
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     stopSpeaking();
     pauseBtn.style.display = 'none';
+    abortBtn.style.display = 'none';
+    abortBtn.onclick = null;
   }
 
   /* ---------- session begin (user gesture → fullscreen, wake lock, DND reminder) ---------- */
   ui.show('screen-session');
   pauseBtn.style.display = 'none';
+  abortBtn.style.display = 'none';
   progressEl.textContent = '';
 
   await new Promise((resolve) => {
@@ -128,8 +134,10 @@ export async function runSession(ctx, resumeState = null) {
   while (state.current) {
     const step = stepById.get(state.current);
     const stepIndex = kc.steps.findIndex((s) => s.step_id === step.step_id);
-    progressEl.textContent = `STEP ${stepIndex + 1} / ${kc.steps.length}`;
+    progressEl.textContent = `STEP ${stepIndex + 1} / ${kc.steps.length}`
+      + (step.phase ? ` · ${String(step.phase).toUpperCase()}` : '');
     pauseBtn.style.display = '';
+    abortBtn.style.display = '';
 
     const outcome = await runStep(step);
 
@@ -173,9 +181,14 @@ export async function runSession(ctx, resumeState = null) {
   async function runStep(step) {
     await ledger.append('step_presented', { session_id: sessionId, step_id: step.step_id });
 
+    const sev = sevOf(step);
+    /* critical_safety demands an active, named assertion (schema amendment §2):
+       the assertion text is displayed, must be checked, and is logged verbatim. */
+    const assertion = sev === 'critical_safety' && step.safety_assertion ? step.safety_assertion : null;
+
     body.innerHTML = `
-      <div class="step-card ${step.critical ? 'critical' : ''}">
-        ${step.critical ? '<div class="critical-banner">CRITICAL ACTION</div>' : ''}
+      <div class="step-card ${sev === 'critical_safety' ? 'critical safety' : sev === 'critical' ? 'critical' : ''}">
+        ${sev !== 'standard' ? `<div class="critical-banner ${sev === 'critical_safety' ? 'safety' : ''}">${SEVERITY_BADGE[sev]}</div>` : ''}
         <div class="step-title">${step.title}</div>
         <div class="step-label-tag">${step.equipment_label || ''}</div>
         <p class="step-instruction">${step.instruction}</p>
@@ -205,12 +218,14 @@ export async function runSession(ctx, resumeState = null) {
     const confirmArea = document.getElementById('confirm-area');
 
     const speakStep = async () => {
-      const text = (step.critical ? 'Critical action. Verify before execution. ' : '') + step.phraseology;
-      await speak(text);
+      const prefix = sev === 'critical_safety' ? 'Critical safety step. Verify before execution. '
+        : sev === 'critical' ? 'Critical action. Verify before execution. ' : '';
+      await speak(prefix + step.phraseology);
       await ledger.append('step_spoken', { session_id: sessionId, step_id: step.step_id });
     };
     let listener = null;
     let pauseRequested = null; // set by pause button while a stage is running
+    let abortRequested = false; // set by the persistent abort button
     let rearmVoiceWindow = () => {}; // assigned in stage 2 while a voice window exists
 
     document.getElementById('btn-replay').addEventListener('click', () => {
@@ -221,11 +236,13 @@ export async function runSession(ctx, resumeState = null) {
 
     const onPauseClick = () => { pauseRequested = true; if (listener) listener.stop(); stopSpeaking(); };
     pauseBtn.onclick = onPauseClick;
+    const onAbortClick = () => { abortRequested = true; if (listener) listener.stop(); stopSpeaking(); };
+    abortBtn.onclick = onAbortClick;
 
     await speakStep();
 
     /* ----- stage 1 for critical steps: prerequisite verification (tap required) ----- */
-    if (step.critical && step.critical_prerequisites.length > 0) {
+    if (sev !== 'standard' && (step.critical_prerequisites || []).length > 0) {
       const stage1 = await new Promise((resolve) => {
         const block = document.createElement('div');
         block.className = 'prereq-block';
@@ -246,12 +263,17 @@ export async function runSession(ctx, resumeState = null) {
 
         holdEl.onComplete(() => resolve('confirmed'));
 
-        // pause can interrupt stage 1
+        // pause or abort can interrupt stage 1
         const iv = setInterval(() => {
-          if (pauseRequested) { clearInterval(iv); resolve('paused'); }
+          if (abortRequested) { clearInterval(iv); resolve('aborted'); }
+          else if (pauseRequested) { clearInterval(iv); resolve('paused'); }
         }, 200);
       });
 
+      if (stage1 === 'aborted') {
+        const aborted = await abortFlow(step);
+        return aborted || { action: 'repeat' }; // cancelled abort re-presents the step
+      }
       if (stage1 === 'paused') return await pauseFlow(step);
 
       await ledger.append('critical_prereq_confirm', {
@@ -275,9 +297,25 @@ export async function runSession(ctx, resumeState = null) {
       confirmArea.appendChild(status);
       const statusText = status.querySelector('.voice-text');
 
-      const hold = ui.holdButton(step.required_callout.toUpperCase(), 'press and hold to confirm', step.critical);
+      /* critical_safety: the named assertion must be actively checked before
+         the confirm unlocks — a distinct affirmative act, not a generic tap. */
+      let assertBox = null;
+      if (assertion) {
+        const item = document.createElement('label');
+        item.className = 'check-item assert-item';
+        item.innerHTML = `<input type="checkbox"><span class="check-decl">${assertion}</span>`;
+        confirmArea.appendChild(item);
+        assertBox = item.querySelector('input');
+        assertBox.addEventListener('change', () => {
+          item.classList.toggle('checked', assertBox.checked);
+          hold.setDisabled(!assertBox.checked);
+        });
+      }
+
+      const hold = ui.holdButton(step.required_callout.toUpperCase(), 'press and hold to confirm', sev !== 'standard');
       confirmArea.appendChild(hold.el);
       hold.onComplete(() => finish({ method: 'tap', detail: null }));
+      if (assertion) hold.setDisabled(true);
 
       let alt = null;
       if (step.alternate_confirm) {
@@ -303,12 +341,12 @@ export async function runSession(ctx, resumeState = null) {
       }
 
       const iv = setInterval(() => {
-        if (pauseRequested && !done) {
+        if ((pauseRequested || abortRequested) && !done) {
           done = true;
           if (listener) { listener.stop(); listener = null; }
           stopCountdown();
           clearInterval(iv);
-          resolve({ paused: true });
+          resolve(abortRequested ? { aborted: true } : { paused: true });
         }
       }, 200);
 
@@ -345,7 +383,11 @@ export async function runSession(ctx, resumeState = null) {
         renderCountdown();
       };
 
-      if (voiceSupported() && navigator.onLine) {
+      if (assertion) {
+        /* Voice cannot stand in for the assertion: confirmation is the checked
+           assertion plus press-and-hold, nothing less. */
+        statusText.textContent = 'Critical safety step — check the assertion above, then press and hold to confirm.';
+      } else if (voiceSupported() && navigator.onLine) {
         let armed = false;
         listener = new VoiceListener(step.callout_keywords, {
           onMatch: (transcript) => finish({ method: 'voice', detail: { transcript } }),
@@ -379,11 +421,18 @@ export async function runSession(ctx, resumeState = null) {
       }
     });
 
+    if (result.aborted) {
+      const aborted = await abortFlow(step);
+      return aborted || { action: 'repeat' }; // cancelled abort re-presents the step
+    }
     if (result.paused) return await pauseFlow(step);
 
     state.confirmations[result.method]++;
     await ledger.append('step_confirmed', {
-      session_id: sessionId, step_id: step.step_id, method: result.method, detail: result.detail
+      session_id: sessionId, step_id: step.step_id, method: result.method,
+      detail: assertion
+        ? { ...(result.detail || {}), severity: 'critical_safety', assertion }
+        : result.detail
     });
 
     pauseBtn.onclick = null;
@@ -395,30 +444,96 @@ export async function runSession(ctx, resumeState = null) {
 
     /* ----- post-step decision (IF/THEN branch, e.g. after S13) ----- */
     if (step.post_decision) {
-      const choice = await new Promise((resolve) => {
-        body.innerHTML = `
-          <div class="decision-block">
-            <div class="decision-prompt">${step.post_decision.prompt}</div>
-            <div id="decision-actions" style="display:flex;flex-direction:column;gap:12px;"></div>
-          </div>
-        `;
-        const actions = document.getElementById('decision-actions');
-        step.post_decision.options.forEach((opt) => {
-          const h = ui.holdButton(opt.label, 'press and hold');
-          h.onComplete(() => resolve(opt));
-          actions.appendChild(h.el);
+      for (;;) {
+        const choice = await new Promise((resolve) => {
+          body.innerHTML = `
+            <div class="decision-block">
+              <div class="decision-prompt">${step.post_decision.prompt}</div>
+              <div id="decision-actions" style="display:flex;flex-direction:column;gap:12px;"></div>
+            </div>
+          `;
+          const actions = document.getElementById('decision-actions');
+          let done = false;
+          const fin = (v) => { if (done) return; done = true; clearInterval(aiv); resolve(v); };
+          step.post_decision.options.forEach((opt) => {
+            const h = ui.holdButton(opt.label, 'press and hold');
+            h.onComplete(() => fin(opt));
+            actions.appendChild(h.el);
+          });
+          const aiv = setInterval(() => { if (abortRequested) fin({ aborted: true }); }, 200);
+          speak(step.post_decision.prompt);
         });
-        speak(step.post_decision.prompt);
-      });
-      await ledger.append('branch_decision', {
-        session_id: sessionId, step_id: step.step_id, method: 'tap',
-        detail: { decision: choice.detail, goto: choice.goto }
-      });
-      await speak(choice.spoken);
-      return { action: 'goto', target: choice.goto };
+        if (choice.aborted) {
+          const aborted = await abortFlow(step, { at: 'post_decision' });
+          if (aborted) return aborted;
+          abortRequested = false;
+          continue; // cancelled abort re-presents the decision
+        }
+        await ledger.append('branch_decision', {
+          session_id: sessionId, step_id: step.step_id, method: 'tap',
+          detail: { decision: choice.detail, goto: choice.goto }
+        });
+        await speak(choice.spoken);
+        return { action: 'goto', target: choice.goto };
+      }
     }
 
     return { action: 'advance' };
+  }
+
+  /* ================= global abort (schema amendment §1) =================
+     A safety halt available from every screen of an active session. The
+     operator picks an enumerated condition; the session ends with a distinct
+     session_aborted terminal event and can never resume — the procedure
+     restarts from step 1 next time. Returns the exit outcome, or null when
+     the operator cancels back to work. */
+
+  async function abortFlow(step, extraDetail = null) {
+    ui.show('screen-session');
+    pauseBtn.style.display = 'none';
+    abortBtn.style.display = 'none';
+    progressEl.textContent = 'ABORT';
+    stopSpeaking();
+
+    const pick = await new Promise((resolve) => {
+      body.innerHTML = `
+        <div class="step-card safety">
+          <div class="critical-banner safety">ABORT — ABNORMAL CONDITION</div>
+          <div class="step-title">Stop this session</div>
+          <p class="step-instruction">Select the condition you observed. The session ends immediately
+          and the abort is recorded in the ledger. An aborted procedure cannot be resumed —
+          it must restart from step 1 once the condition is resolved.</p>
+        </div>
+        <div id="abort-actions" style="display:flex;flex-direction:column;gap:12px;"></div>
+      `;
+      const actions = document.getElementById('abort-actions');
+      for (const r of abortReasonsFor(kc, kcType)) {
+        const h = ui.holdButton(r.label, 'press and hold — ends the session', 'danger');
+        h.onComplete(() => resolve(r));
+        actions.appendChild(h.el);
+      }
+      const cancel = document.createElement('button');
+      cancel.className = 'btn btn-secondary';
+      cancel.textContent = 'CANCEL — CONTINUE THE PROCEDURE';
+      cancel.addEventListener('click', () => resolve(null));
+      actions.appendChild(cancel);
+    });
+
+    if (!pick) {
+      pauseBtn.style.display = '';
+      abortBtn.style.display = '';
+      return null;
+    }
+
+    await appendSessionAborted(ledger, {
+      session_id: sessionId, step_id: step.step_id,
+      reason_code: pick.code, reason_label: pick.label,
+      extra: { steps_confirmed: state.completed.length, ...(extraDetail || {}) }
+    });
+    clearSnapshot();
+    cleanup();
+    await speak('Session aborted. The event is recorded. This procedure must restart from step one.');
+    return { action: 'exit', reason: 'aborted', abort: { reason_code: pick.code, reason_label: pick.label } };
   }
 
   /* ================= pause / interruption ================= */
@@ -437,6 +552,11 @@ export async function runSession(ctx, resumeState = null) {
 
     const choice = await new Promise((resolve) => {
       document.getElementById('btn-resume').onclick = () => resolve({ type: 'resume' });
+      document.getElementById('btn-pause-abort').onclick = async () => {
+        const aborted = await abortFlow(step, { from: 'pause' });
+        if (aborted) resolve({ type: 'aborted', outcome: aborted });
+        else ui.show('screen-pause'); // cancelled — stay paused
+      };
       document.getElementById('btn-abandon').onclick = async () => {
         const reason = await chooseClosureReason(ui, { allowCancel: true });
         if (reason !== null) resolve({ type: 'abandon', reason });
@@ -451,6 +571,10 @@ export async function runSession(ctx, resumeState = null) {
     clearInterval(tick);
 
     const elapsed = Date.now() - pausedAt;
+
+    /* Abort already wrote its terminal event, cleared the snapshot, and
+       cleaned up inside abortFlow — just propagate the exit. */
+    if (choice.type === 'aborted') return choice.outcome;
 
     if (choice.type === 'abandon') {
       await appendSessionClosed(ledger, {
@@ -513,7 +637,8 @@ export async function runSession(ctx, resumeState = null) {
       .map((s) => ({
         step_id: s.step_id,
         title: s.title,
-        critical: !!s.critical,
+        critical: sevOf(s) !== 'standard',
+        severity: sevOf(s),
         critical_prerequisites: s.critical_prerequisites || []
       }));
   }
@@ -584,7 +709,7 @@ export async function runSession(ctx, resumeState = null) {
         const row = document.createElement('button');
         row.className = 'btn btn-secondary step-pick';
         row.innerHTML = `<span class="step-num">${String(i + 1).padStart(2, '0')}</span> ${s.title}` +
-          (s.critical ? ' <span class="badge-critical">CRITICAL</span>' : '');
+          (sevOf(s) !== 'standard' ? ' <span class="badge-critical">CRITICAL</span>' : '');
         row.addEventListener('click', () => {
           list.querySelectorAll('.step-pick').forEach((r) => r.classList.remove('selected'));
           row.classList.add('selected');

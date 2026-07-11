@@ -42,3 +42,43 @@ export function appendSessionClosed(ledger, { session_id, step_id = null, closed
     detail: { reason, closed_from, ...(extra || {}) }
   });
 }
+
+/* ---- Global abort path (KC schema amendment §1) ----
+   An abort is a SAFETY halt on an abnormal condition, distinct from the
+   administrative closures above. Reason codes are enumerated (no mandatory
+   free text); the set grows as real abort events surface gaps. Every KC type
+   gets the generic set; dangerous-equipment KCs add hazard codes; a KC doc
+   can extend the menu via an abort_reasons: [{code, label}] array. */
+
+export const ABORT_REASONS_GENERIC = [
+  { code: 'abnormal_noise', label: 'ABNORMAL NOISE' },
+  { code: 'visible_damage', label: 'VISIBLE DAMAGE' },
+  { code: 'wont_start', label: 'EQUIPMENT WON\'T START / OPERATE' },
+  { code: 'operator_judgment_other', label: 'OPERATOR JUDGMENT — OTHER CONDITION' }
+];
+
+export const ABORT_REASONS_DANGEROUS = [
+  { code: 'fuel_smell', label: 'FUEL SMELL' },
+  { code: 'co_alarm', label: 'CO ALARM' }
+];
+
+export function abortReasonsFor(kc, kcType) {
+  const list = kcType === 'dangerous_equipment'
+    ? [...ABORT_REASONS_DANGEROUS, ...ABORT_REASONS_GENERIC]
+    : [...ABORT_REASONS_GENERIC];
+  for (const r of kc.abort_reasons || []) {
+    if (r && r.code && r.label && !list.some((x) => x.code === r.code)) list.push(r);
+  }
+  return list;
+}
+
+/* Terminal event for an aborted session. An aborted procedure can never
+   resume mid-point — the next session restarts from step 1. */
+export function appendSessionAborted(ledger, { session_id, step_id = null, reason_code, reason_label, extra = null }) {
+  return ledger.append('session_aborted', {
+    session_id,
+    step_id,
+    method: 'tap',
+    detail: { reason_code, reason_label, aborted_at_step: step_id, ...(extra || {}) }
+  });
+}

@@ -98,6 +98,21 @@ html, body {
   font-size: 0.65rem; font-weight: 800; letter-spacing: 0.1em;
   border-radius: 5px; padding: 2px 7px;
 }
+.badge-safety {
+  background: var(--danger); color: #fff;
+  font-size: 0.65rem; font-weight: 800; letter-spacing: 0.1em;
+  border-radius: 5px; padding: 2px 7px;
+}
+.badge-phase {
+  background: transparent; color: var(--text-dim); border: 1px solid var(--line);
+  font-size: 0.65rem; font-weight: 800; letter-spacing: 0.1em;
+  border-radius: 5px; padding: 2px 7px;
+}
+.review-item.safety { border-color: var(--danger); }
+.review-assertion {
+  margin-top: 8px; padding: 8px 12px; border-left: 3px solid var(--danger);
+  background: rgba(255, 93, 93, 0.08); font-size: 0.88rem; border-radius: 0 8px 8px 0;
+}
 .review-item .review-instruction { color: var(--text-dim); font-size: 0.88rem; margin-top: 6px; }
 .review-item video {
   width: 100%; margin-top: 10px; border-radius: 8px; background: #000;
@@ -259,6 +274,18 @@ textarea:focus { outline: 2px solid var(--accent); }
 .check-item .check-decl { font-size: 0.98rem; line-height: 1.5; }
 .na-active { border-color: var(--accent); color: var(--accent); }
 
+/* critical_safety assertion (stage 2): red until actively checked */
+.check-item.assert-item { border-color: var(--danger); background: rgba(255, 93, 93, 0.05); }
+.check-item.assert-item input { accent-color: var(--danger); }
+.check-item.assert-item.checked { border-color: var(--ok); background: var(--bg-card); }
+
+/* Gate 0 QR-verified items */
+.scan-row { cursor: default; }
+.scan-row .scan-main { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.scan-row .scan-btn { width: auto; flex: none; padding: 12px 16px; font-size: 0.85rem; }
+.scan-row .scan-note { min-height: 0; }
+.scan-row .scan-fallback { width: auto; align-self: flex-start; padding: 8px 12px; font-size: 0.75rem; }
+
 /* ---------- session (sterile) ---------- */
 .sterile { background: #05080c; }
 .session-bar {
@@ -267,6 +294,10 @@ textarea:focus { outline: 2px solid var(--accent); }
 }
 .session-progress { font-size: 0.95rem; letter-spacing: 0.15em; color: var(--text-dim); font-weight: 700; }
 .btn-pause { width: auto; padding: 8px 16px; font-size: 0.8rem; background: transparent; color: var(--text-dim); }
+.btn-abort {
+  width: auto; padding: 8px 14px; font-size: 0.8rem; background: transparent;
+  color: var(--danger); border: 1px solid var(--danger); margin-left: auto; margin-right: 10px;
+}
 
 .session-body { display: flex; flex-direction: column; gap: 16px; flex: 1; padding-bottom: 20px; }
 
@@ -277,11 +308,13 @@ textarea:focus { outline: 2px solid var(--accent); }
   background: var(--bg-raise);
 }
 .step-card.critical { border: 2px solid var(--warn); }
+.step-card.safety { border: 2px solid var(--danger); }
 .critical-banner {
   background: var(--warn); color: #14100a;
   font-weight: 800; letter-spacing: 0.18em; text-align: center;
   border-radius: 8px; padding: 8px; margin-bottom: 14px; font-size: 0.85rem;
 }
+.critical-banner.safety { background: var(--danger); color: #fff; }
 .step-title { font-size: 1.3rem; font-weight: 700; margin-bottom: 4px; }
 .step-label-tag { color: var(--accent); font-size: 0.8rem; letter-spacing: 0.1em; font-weight: 700; margin-bottom: 12px; }
 .step-instruction { font-size: 1.12rem; line-height: 1.55; }

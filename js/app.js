@@ -9,7 +9,7 @@ import * as backend from './backend.js';
 import * as sync from './sync.js';
 import { runBuilder } from './builder.js';
 
-const APP_VERSION = '0.5.2';
+const APP_VERSION = '0.6.0';
 const HOLD_SECONDS = 1.5;
 
 /* ---------------- UI helpers ---------------- */
@@ -645,6 +645,7 @@ async function runGatedSession() {
       });
     }
     endSessionContext();
+    document.getElementById('blocked-title').textContent = 'SESSION BLOCKED';
     document.getElementById('blocked-reason').textContent = gateResult.reason;
     show('screen-blocked');
     return;
@@ -674,6 +675,12 @@ function finishSession(result) {
       <div class="summary-stat"><span class="k">Ledger</span><span class="v">recorded &amp; chained</span></div>
     `;
     show('screen-summary');
+  } else if (result.reason === 'aborted') {
+    document.getElementById('blocked-title').textContent = 'SESSION ABORTED';
+    document.getElementById('blocked-reason').textContent =
+      `Aborted — ${result.abort.reason_label}. An aborted procedure cannot resume: ` +
+      'start a new session from step 1 once the condition is resolved.';
+    show('screen-blocked');
   } else {
     show('screen-home');
   }
@@ -816,6 +823,7 @@ function showLedgerScreen() {
     const d = document.createElement('div');
     d.className = 'ledger-session-card';
     const status = s.completed ? 'COMPLETED'
+      : s.aborted_reason ? `ABORTED — ${s.aborted_reason.toUpperCase()}`
       : s.closed_reason ? `CLOSED — ${s.closed_reason.toUpperCase()}`
       : s.blocked ? 'BLOCKED AT GATE'
       : 'NOT COMPLETED';

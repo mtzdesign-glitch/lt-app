@@ -5,6 +5,7 @@
    Gate 3 — Equipment Baseline State Checklist */
 
 import { speak } from './speech.js';
+import { scanQR, qrSupported } from './scan.js';
 
 const FITNESS_DECLARATIONS = [
   'This equipment has not been flagged as out of service, damaged, or compromised by any person in this organization.',
@@ -40,62 +41,134 @@ export async function runGates(ctx) {
   setProgress(0);
   title.textContent = 'GATE 0 — EQUIPMENT LABELS';
 
-  /* KCs authored with no equipment have nothing to verify here; the session
+  /* Manifest-aware identity check (schema amendment §4): items whose identity
+     method is QR/NFC are verified by scanning the physical tag against the
+     stored tag value; label-only items keep the visual checkbox. KCs from
+     before the manifest existed fall back to their plain label list.
+     KCs authored with no equipment have nothing to verify here; the session
      then enters the ledger at the first fitness confirmation instead. */
-  const gate0 = kc.equipment_labels.length === 0 ? { ok: true } : await new Promise((resolve) => {
+  const manifest = (kc.equipment_manifest && kc.equipment_manifest.length > 0)
+    ? kc.equipment_manifest
+    : (kc.equipment_labels || []).map((label) => ({ label, identity_method: 'none', tag_value: null }));
+
+  const gate0 = manifest.length === 0 ? { ok: true, verified: [] } : await new Promise((resolve) => {
     body.innerHTML = `
-      <div class="gate-heading">Equipment label check</div>
-      <div class="gate-sub">Locate each item and read its physical label. Check off each label once you have confirmed it at the equipment. All labels must be checked to proceed.</div>
+      <div class="gate-heading">Equipment identity check</div>
+      <div class="gate-sub">Confirm each item at the equipment. Tagged items are verified by scanning their QR code; the rest by reading the physical label. All items must be verified to proceed.</div>
       <div class="check-list" id="label-list"></div>
       <div class="decl-actions" id="label-actions"></div>
     `;
     const list = document.getElementById('label-list');
     const actions = document.getElementById('label-actions');
+    const verified = manifest.map(() => null); // per item: null | {verify, scanned_value?}
 
-    kc.equipment_labels.forEach((label) => {
-      const item = document.createElement('label');
-      item.className = 'check-item';
-      item.innerHTML = `
-        <input type="checkbox">
-        <span class="check-name">${label}</span>
-      `;
-      list.appendChild(item);
-    });
-    const boxes = () => [...list.querySelectorAll('input')];
-
-    const hold = ui.holdButton('ALL LABELS CONFIRMED', 'press and hold');
+    const hold = ui.holdButton('ALL EQUIPMENT VERIFIED', 'press and hold');
     hold.setDisabled(true);
-    hold.onComplete(() => resolve({ ok: true }));
-    actions.appendChild(hold.el);
+    hold.onComplete(() => resolve({ ok: true, verified }));
 
-    const missing = ui.holdButton('LABEL MISSING OR DOES NOT MATCH', 'press and hold — ends the session', 'danger');
+    const sync = () => hold.setDisabled(!verified.every(Boolean));
+
+    manifest.forEach((item, i) => {
+      const needsScan = item.identity_method === 'qr_nfc' && item.tag_value;
+
+      if (!needsScan) {
+        const row = document.createElement('label');
+        row.className = 'check-item';
+        row.innerHTML = `<input type="checkbox"><span class="check-name">${item.label}</span>`;
+        row.querySelector('input').addEventListener('change', (e) => {
+          verified[i] = e.target.checked ? { verify: 'visual' } : null;
+          row.classList.toggle('checked', e.target.checked);
+          sync();
+        });
+        list.appendChild(row);
+        return;
+      }
+
+      const row = document.createElement('div');
+      row.className = 'check-item scan-row';
+      row.innerHTML = `
+        <div class="scan-main">
+          <span class="check-name">${item.label}</span>
+          <div class="mismatch-note scan-note"></div>
+        </div>
+        <button class="btn btn-secondary scan-btn">SCAN TAG</button>
+      `;
+      const note = row.querySelector('.scan-note');
+      const btn = row.querySelector('.scan-btn');
+
+      /* The visual fallback keeps a session possible when scanning cannot
+         work (unsupported browser, damaged tag, camera denied) — but it is
+         recorded distinctly, so the ledger shows the tag was NOT scanned. */
+      let fallbackShown = false;
+      const showFallback = (msg) => {
+        note.textContent = msg;
+        if (fallbackShown) return;
+        fallbackShown = true;
+        const fb = document.createElement('button');
+        fb.className = 'btn btn-tertiary scan-fallback';
+        fb.textContent = 'CAN\'T SCAN — CONFIRM BY LABEL INSTEAD';
+        fb.addEventListener('click', () => {
+          verified[i] = { verify: 'visual_fallback' };
+          row.classList.add('checked');
+          note.textContent = 'Confirmed by label — recorded as not scanned.';
+          btn.disabled = true;
+          fb.remove();
+          sync();
+        });
+        row.querySelector('.scan-main').appendChild(fb);
+      };
+
+      if (!qrSupported()) showFallback('Scanning is not supported on this device.');
+      btn.addEventListener('click', async () => {
+        if (!qrSupported()) return;
+        const value = await scanQR();
+        if (value === null) { showFallback('Scan cancelled or camera unavailable.'); return; }
+        if (value === item.tag_value) {
+          verified[i] = { verify: 'qr_scan', scanned_value: value };
+          row.classList.add('checked');
+          note.textContent = '';
+          btn.textContent = '✓ SCANNED';
+          btn.disabled = true;
+          sync();
+        } else {
+          verified[i] = null;
+          showFallback('The scanned code does not match this item — you may be at the wrong equipment.');
+        }
+      });
+      list.appendChild(row);
+    });
+
+    actions.appendChild(hold.el);
+    const missing = ui.holdButton('ITEM MISSING OR DOES NOT MATCH', 'press and hold — ends the session', 'danger');
     missing.onComplete(() => resolve({
       ok: false,
-      unchecked: kc.equipment_labels.filter((_, i) => !boxes()[i].checked)
+      unchecked: manifest.filter((_, i) => !verified[i]).map((m) => m.label)
     }));
     actions.appendChild(missing.el);
-
-    list.addEventListener('change', () => {
-      boxes().forEach((b) => b.closest('.check-item').classList.toggle('checked', b.checked));
-      hold.setDisabled(!boxes().every((b) => b.checked));
-    });
   });
 
   if (gate0.ok) {
-    /* The first label confirmation is the session's first ledger entry —
+    /* The first identity confirmation is the session's first ledger entry —
        it carries the session context that session_start used to. */
-    for (const label of kc.equipment_labels) {
-      const detail = ctx.sessionLogged
-        ? { label }
-        : {
-            label,
-            session_context: {
-              kc_id: kc.kc_id, kc_version: kc.kc_version, app_version: ctx.appVersion,
-              kc_db_id: ctx.kcRef ? ctx.kcRef.id : null,
-              profile: ctx.profileName || null
-            }
-          };
-      await ledger.append('gate_label_confirm', { session_id: sessionId, method: 'tap', detail });
+    for (let i = 0; i < manifest.length; i++) {
+      const v = gate0.verified[i] || { verify: 'visual' };
+      const detail = {
+        label: manifest[i].label,
+        identity_method: manifest[i].identity_method || 'none',
+        ...v
+      };
+      if (!ctx.sessionLogged) {
+        detail.session_context = {
+          kc_id: kc.kc_id, kc_version: kc.kc_version, app_version: ctx.appVersion,
+          kc_db_id: ctx.kcRef ? ctx.kcRef.id : null,
+          profile: ctx.profileName || null
+        };
+      }
+      await ledger.append('gate_label_confirm', {
+        session_id: sessionId,
+        method: v.verify === 'qr_scan' ? 'qr_scan' : 'tap',
+        detail
+      });
       ctx.sessionLogged = true;
     }
   } else {

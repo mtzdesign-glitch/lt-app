@@ -129,7 +129,7 @@
   <section id="screen-blocked" class="screen">
     <div class="blocked-wrap">
       <div class="blocked-icon">&#9632;</div>
-      <h2>SESSION BLOCKED</h2>
+      <h2 id="blocked-title">SESSION BLOCKED</h2>
       <p id="blocked-reason"></p>
       <p class="blocked-note">This event has been recorded in the session ledger.</p>
       <button id="btn-blocked-home" class="btn btn-secondary btn-big">RETURN HOME</button>
@@ -140,6 +140,7 @@
   <section id="screen-session" class="screen sterile">
     <header class="session-bar">
       <div id="session-progress" class="session-progress"></div>
+      <button id="btn-abort" class="btn btn-abort">&#9888; ABORT</button>
       <button id="btn-pause" class="btn btn-pause">PAUSE</button>
     </header>
     <div id="session-body" class="session-body"></div>
@@ -154,6 +155,7 @@
       <button id="btn-resume" class="btn btn-primary btn-big">RESUME</button>
       <button id="btn-pause-review" class="btn btn-secondary">OPEN REVIEW MODE</button>
       <button id="btn-goto-step" class="btn btn-secondary">GO TO A DIFFERENT STEP</button>
+      <button id="btn-pause-abort" class="btn btn-danger-ghost">&#9888; ABORT — ABNORMAL CONDITION</button>
       <button id="btn-abandon" class="btn btn-danger-ghost">END SESSION</button>
     </div>
   </section>

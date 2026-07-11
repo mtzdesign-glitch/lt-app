@@ -3,6 +3,7 @@
    sessions. No gates. Viewing a clip writes a review_view ledger event. */
 
 import { mediaUrl } from './backend.js';
+import { sevOf, SEVERITY_BADGE } from './severity.js';
 
 export function renderReview(ctx) {
   const { kc, ledger } = ctx;
@@ -10,16 +11,21 @@ export function renderReview(ctx) {
   list.innerHTML = '';
 
   kc.steps.forEach((step, i) => {
+    const sev = sevOf(step);
     const item = document.createElement('div');
-    item.className = 'review-item' + (step.critical ? ' critical' : '');
+    item.className = 'review-item'
+      + (sev === 'critical_safety' ? ' critical safety' : sev === 'critical' ? ' critical' : '');
 
     item.innerHTML = `
       <h3>
         <span class="step-num">${String(i + 1).padStart(2, '0')}</span>
         <span>${step.title}</span>
-        ${step.critical ? '<span class="badge-critical">CRITICAL ACTION</span>' : ''}
+        ${step.phase ? `<span class="badge-phase">${String(step.phase).toUpperCase()}</span>` : ''}
+        ${sev !== 'standard' ? `<span class="${sev === 'critical_safety' ? 'badge-safety' : 'badge-critical'}">${SEVERITY_BADGE[sev]}</span>` : ''}
       </h3>
       <div class="review-instruction">${step.instruction}</div>
+      ${sev === 'critical_safety' && step.safety_assertion
+        ? `<div class="review-assertion">Safety assertion: ${step.safety_assertion}</div>` : ''}
     `;
 
     if (step.video) {

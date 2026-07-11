@@ -8,6 +8,8 @@
 
 import * as backend from './backend.js';
 import * as sync from './sync.js';
+import { scanQR, qrSupported } from './scan.js';
+import { sevOf, SEVERITY_BADGE } from './severity.js';
 
 const MAX_CLIP_SECONDS = 120;   // founder decision 2026-07-11: 2-minute cap per clip
 const STOPWORDS = new Set(['the', 'a', 'an', 'and', 'or', 'to', 'of', 'is', 'are', 'be',
@@ -128,7 +130,7 @@ function home() {
     d.innerHTML = `
       <div class="card-main">
         <h3>${s.step_id} · ${escapeHtml(s.title)}</h3>
-        <div class="kc-meta">${s.equipment_label ? escapeHtml(s.equipment_label) + ' · ' : ''}${s.video ? 'video attached' : 'no video'} · ${stepStatus(s)}</div>
+        <div class="kc-meta">${s.phase ? String(s.phase).toUpperCase() + ' · ' : ''}${sevOf(s) !== 'standard' ? SEVERITY_BADGE[sevOf(s)] + ' · ' : ''}${s.equipment_label ? escapeHtml(s.equipment_label) + ' · ' : ''}${s.video ? 'video attached' : 'no video'} · ${stepStatus(s)}</div>
       </div>
       <span class="card-edit">✎ EDIT</span>`;
     d.addEventListener('click', () => stepForm(null, i));
@@ -175,20 +177,31 @@ function stepForm(existingDraft, editIndex = null) {
     d = {
       editIndex, n: editIndex + 1,
       title: s.title, instruction: s.instruction, callout: s.required_callout,
-      critical: !!s.critical, prereqs: (s.critical_prerequisites || []).join('\n'),
+      severity: sevOf(s), assertion: s.safety_assertion || '',
+      phase: s.phase || null,
+      prereqs: (s.critical_prerequisites || []).join('\n'),
       equipment_id: s.equipment_id || null,
       videoBlob: null, videoType: null, videoSeconds: 0, videoRef: s.video || null
     };
   } else {
+    const prevStep = steps[steps.length - 1] || null;
     d = {
       draft_id: stepDraftId(), editIndex: null,
-      n: steps.length + 1, title: '', instruction: '', callout: '', critical: false, prereqs: '',
+      n: steps.length + 1, title: '', instruction: '', callout: '',
+      severity: 'standard', assertion: '',
+      /* a new step usually continues the phase the author is working in */
+      phase: prevStep && prevStep.phase ? prevStep.phase : 'connect',
+      prereqs: '',
       equipment_id: null, videoBlob: null, videoType: null, videoSeconds: 0, videoRef: null
     };
   }
+  /* Drafts written before the severity tier carry only the boolean. */
+  if (!d.severity) d.severity = d.critical ? 'critical' : 'standard';
+  if (d.assertion == null) d.assertion = '';
   const editing = d.editIndex != null;
   const n = editing ? d.editIndex + 1 : steps.length + 1;
   d.n = n; // step count may have changed since the draft was written
+  const withPhases = state.ctx.kcRef.kc_type === 'dangerous_equipment';
 
   const eq = d.equipment_id ? state.equipment.find((e) => e.id === d.equipment_id) : null;
   const videoNote = d.videoBlob
@@ -219,11 +232,24 @@ function stepForm(existingDraft, editIndex = null) {
       <label for="f-callout">Completion call-out — what the TECH says out loud when this step is done</label>
       <input id="f-callout" type="text" value="${escapeHtml(d.callout)}" placeholder="e.g. Valve Closed">
     </div>
-    <label class="check-item">
-      <input type="checkbox" id="f-critical" ${d.critical ? 'checked' : ''}>
-      <span class="check-decl">CRITICAL STEP — the TECH must verify prerequisites before it runs</span>
-    </label>
-    <div class="field" id="f-prereq-field" ${d.critical ? '' : 'hidden'}>
+    ${withPhases ? `
+    <div class="field">
+      <label>Phase of the operation</label>
+      <label class="radio-item"><input type="radio" name="f-phase" value="connect" ${d.phase === 'connect' ? 'checked' : ''}><span>CONNECT — setup and hook-up</span></label>
+      <label class="radio-item"><input type="radio" name="f-phase" value="operate" ${d.phase === 'operate' ? 'checked' : ''}><span>OPERATE — running the equipment</span></label>
+      <label class="radio-item"><input type="radio" name="f-phase" value="disconnect" ${d.phase === 'disconnect' ? 'checked' : ''}><span>DISCONNECT — shutdown and tear-down</span></label>
+    </div>` : ''}
+    <div class="field">
+      <label>Step severity</label>
+      <label class="radio-item"><input type="radio" name="f-sev" value="standard" ${d.severity === 'standard' ? 'checked' : ''}><span>STANDARD — normal step</span></label>
+      <label class="radio-item"><input type="radio" name="f-sev" value="critical" ${d.severity === 'critical' ? 'checked' : ''}><span>CRITICAL — a mistake is correctable; the TECH verifies prerequisites first</span></label>
+      <label class="radio-item"><input type="radio" name="f-sev" value="critical_safety" ${d.severity === 'critical_safety' ? 'checked' : ''}><span>CRITICAL SAFETY — a mistake is NOT correctable; the TECH must confirm a safety assertion</span></label>
+    </div>
+    <div class="field" id="f-assert-field" ${d.severity === 'critical_safety' ? '' : 'hidden'}>
+      <label for="f-assert">Safety assertion — the exact statement the TECH must actively confirm before executing</label>
+      <textarea id="f-assert" rows="3" placeholder="e.g. I confirm the unit is outdoors, at least 20 feet from any structure or opening.">${escapeHtml(d.assertion)}</textarea>
+    </div>
+    <div class="field" id="f-prereq-field" ${d.severity !== 'standard' ? '' : 'hidden'}>
       <label for="f-prereqs">Prerequisites to verify (one per line)</label>
       <textarea id="f-prereqs" rows="3" placeholder="e.g. Pump is running">${escapeHtml(d.prereqs)}</textarea>
     </div>
@@ -244,11 +270,19 @@ function stepForm(existingDraft, editIndex = null) {
   });
   $('#f-instr').addEventListener('input', (e) => { d.instruction = e.target.value; persistDraft(d); });
   $('#f-callout').addEventListener('input', (e) => { d.callout = e.target.value; persistDraft(d); });
-  $('#f-critical').addEventListener('change', (e) => {
-    d.critical = e.target.checked;
-    $('#f-prereq-field').hidden = !d.critical;
+  els.body.querySelectorAll('[name="f-sev"]').forEach((r) => r.addEventListener('change', () => {
+    d.severity = r.value;
+    $('#f-prereq-field').hidden = d.severity === 'standard';
+    $('#f-assert-field').hidden = d.severity !== 'critical_safety';
     persistDraft(d);
-  });
+  }));
+  if (withPhases) {
+    els.body.querySelectorAll('[name="f-phase"]').forEach((r) => r.addEventListener('change', () => {
+      d.phase = r.value;
+      persistDraft(d);
+    }));
+  }
+  $('#f-assert').addEventListener('input', (e) => { d.assertion = e.target.value; persistDraft(d); });
   $('#f-prereqs').addEventListener('input', (e) => { d.prereqs = e.target.value; persistDraft(d); });
 
   $('#f-eq').addEventListener('click', () => equipmentPicker(d));
@@ -298,6 +332,12 @@ async function saveStep(d) {
     await state.ctx.ui.modal('A step needs a title, an instruction, and a completion call-out before it can be saved.', ['OK']);
     return;
   }
+  const severity = d.severity || 'standard';
+  const assertion = (d.assertion || '').trim();
+  if (severity === 'critical_safety' && !assertion) {
+    await state.ctx.ui.modal('A critical safety step needs its safety assertion — the exact statement the TECH must confirm before executing.', ['OK']);
+    return;
+  }
 
   const editing = d.editIndex != null;
   const steps = state.doc.steps || (state.doc.steps = []);
@@ -318,19 +358,26 @@ async function saveStep(d) {
   const step = {
     step_id: stepId,
     title,
-    critical: !!d.critical,
+    severity,
+    critical: severity !== 'standard', // legacy field, kept for older readers
+    safety_assertion: severity === 'critical_safety' ? assertion : null,
     equipment_id: eq ? eq.id : null,
     equipment_label: eq ? eq.name.toUpperCase() : null,
     instruction,
     phraseology: '', // filled by normalizeDoc
     required_callout: callout,
     callout_keywords: keywords(callout),
-    critical_prerequisites: d.critical
+    critical_prerequisites: severity !== 'standard'
       ? d.prereqs.split('\n').map((s) => s.trim()).filter(Boolean)
       : [],
     video: videoRef,
     failure_note: prev ? prev.failure_note : null
   };
+  if (state.ctx.kcRef.kc_type === 'dangerous_equipment') {
+    step.phase = d.phase || 'connect';
+  } else if (prev && prev.phase) {
+    step.phase = prev.phase; // never silently drop a hand-authored phase
+  }
   /* hand-authored extras (branching, alternate confirms) survive an edit */
   if (prev && prev.post_decision) step.post_decision = prev.post_decision;
   if (prev && prev.alternate_confirm) step.alternate_confirm = prev.alternate_confirm;
@@ -362,6 +409,22 @@ function normalizeDoc() {
     }
   });
   state.doc.equipment_labels = [...new Set(steps.map((s) => s.equipment_label).filter(Boolean))];
+
+  /* Equipment manifest (schema amendment §4): every equipment instance the KC
+     touches, with its identity method and tag value copied INTO the doc — so
+     Gate 0 can verify a QR tag offline without resolving the equipment table. */
+  const manifest = [];
+  for (const s of steps) {
+    if (!s.equipment_label || manifest.some((m) => m.label === s.equipment_label)) continue;
+    const rec = s.equipment_id ? state.equipment.find((e) => e.id === s.equipment_id) : null;
+    manifest.push({
+      equipment_id: s.equipment_id || null,
+      label: s.equipment_label,
+      identity_method: rec ? rec.identity_method : 'none',
+      tag_value: rec && rec.identity_method !== 'none' ? (rec.tag_value || null) : null
+    });
+  }
+  state.doc.equipment_manifest = manifest;
 }
 
 async function persistDoc() {
@@ -441,7 +504,7 @@ function equipmentForm(onDone, existing = null) {
     <div class="field" id="e-tag-field" ${d.method === 'none' ? 'hidden' : ''}>
       <label for="e-tag">Tag value</label>
       <input id="e-tag" type="text" value="${escapeHtml(d.tag)}" placeholder="the label text or QR/NFC payload">
-      <button class="btn btn-secondary" id="e-scan" ${d.method === 'qr_nfc' && 'BarcodeDetector' in window ? '' : 'hidden'}>SCAN QR CODE</button>
+      <button class="btn btn-secondary" id="e-scan" ${d.method === 'qr_nfc' && qrSupported() ? '' : 'hidden'}>SCAN QR CODE</button>
     </div>
     <button class="btn btn-primary btn-big" id="e-save">${existing ? 'SAVE CHANGES' : 'SAVE EQUIPMENT'}</button>
     ${existing ? '<button class="btn btn-danger-ghost" id="e-delete">DELETE THIS EQUIPMENT</button>' : ''}
@@ -467,7 +530,7 @@ function equipmentForm(onDone, existing = null) {
   els.body.querySelectorAll('[name="e-method"]').forEach((r) => r.addEventListener('change', () => {
     d.method = r.value;
     $('#e-tag-field').hidden = d.method === 'none';
-    $('#e-scan').hidden = !(d.method === 'qr_nfc' && 'BarcodeDetector' in window);
+    $('#e-scan').hidden = !(d.method === 'qr_nfc' && qrSupported());
   }));
   $('#e-tag').addEventListener('input', (e) => { d.tag = e.target.value; });
   $('#e-scan').onclick = async () => {
@@ -501,8 +564,11 @@ function equipmentForm(onDone, existing = null) {
     backend.cacheAddEquipment(rec);
     await sync.enqueue('equipment_upsert', rec);
 
-    /* A rename must flow into this KC's steps and its Gate-0 label list. */
-    if (existing && existing.name !== rec.name) {
+    /* A rename, tag, or identity-method change must flow into this KC's steps
+       and its Gate-0 manifest (labels + tag values live in the doc). */
+    if (existing && (existing.name !== rec.name ||
+        existing.identity_method !== rec.identity_method ||
+        existing.tag_value !== rec.tag_value)) {
       let touched = false;
       for (const s of state.doc.steps || []) {
         if (s.equipment_id === id) { s.equipment_label = rec.name.toUpperCase(); touched = true; }
@@ -693,44 +759,4 @@ function captureVideo() {
   });
 }
 
-/* ---------------- QR scan (Chrome on Android has BarcodeDetector) ---------------- */
-
-function scanQR() {
-  return new Promise(async (resolve) => {
-    let stream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-    } catch {
-      resolve(null);
-      return;
-    }
-    const overlay = document.createElement('div');
-    overlay.className = 'capture-overlay';
-    overlay.innerHTML = `
-      <video id="scan-video" autoplay playsinline muted></video>
-      <div class="rec-timer">Point the camera at the QR code</div>
-      <div class="rec-controls"><button class="btn btn-secondary" id="scan-cancel">CANCEL</button></div>
-    `;
-    document.body.appendChild(overlay);
-    const v = overlay.querySelector('#scan-video');
-    v.srcObject = stream;
-
-    const detector = new BarcodeDetector({ formats: ['qr_code'] });
-    let live = true;
-    function cleanup(value) {
-      live = false;
-      stream.getTracks().forEach((t) => t.stop());
-      overlay.remove();
-      resolve(value);
-    }
-    overlay.querySelector('#scan-cancel').onclick = () => cleanup(null);
-
-    const poll = setInterval(async () => {
-      if (!live) { clearInterval(poll); return; }
-      try {
-        const codes = await detector.detect(v);
-        if (codes.length) { clearInterval(poll); cleanup(codes[0].rawValue); }
-      } catch { /* frame not ready yet */ }
-    }, 400);
-  });
-}
+/* QR scanning moved to scan.js — shared with Gate 0's identity check. */
