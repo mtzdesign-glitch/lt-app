@@ -65,21 +65,30 @@ export class VoiceListener {
     const rec = new SR();
     this.rec = rec;
     rec.lang = 'en-US';
-    rec.continuous = false;
-    rec.interimResults = false;
+    // One continuous session per voice window, not a fresh session every few
+    // seconds: Android plays its system listening chime on every recognition
+    // start/stop, and each restart steals audio focus from a playing video.
+    rec.continuous = true;
+    rec.interimResults = true;
     rec.maxAlternatives = 4;
 
     rec.onstart = () => this.cb.onStateChange && this.cb.onStateChange(true);
 
     rec.onresult = (ev) => {
-      const alts = Array.from(ev.results[0]);
-      const hit = alts.find((a) => matchesCallout(a.transcript, this.keywords));
-      if (hit) {
-        this.stop();
-        this.cb.onMatch(hit.transcript.trim());
-      } else {
-        this.cb.onReject(alts[0] ? alts[0].transcript.trim() : '');
-        // _spin() again happens via onend
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const res = ev.results[i];
+        const alts = Array.from(res);
+        // Interim transcripts count for matching (faster confirm), but only
+        // final ones are logged as rejections — interims are half-sentences.
+        const hit = alts.find((a) => matchesCallout(a.transcript, this.keywords));
+        if (hit) {
+          this.stop();
+          this.cb.onMatch(hit.transcript.trim());
+          return;
+        }
+        if (res.isFinal) {
+          this.cb.onReject(alts[0] ? alts[0].transcript.trim() : '');
+        }
       }
     };
 
