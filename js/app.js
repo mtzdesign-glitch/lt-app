@@ -11,7 +11,7 @@ import { runBuilder } from './builder.js';
 import { runPublicManual, runManualViewer, sectionsOf } from './manual.js';
 import { runPublishScreen } from './publish.js';
 
-const APP_VERSION = '0.9.1';
+const APP_VERSION = '0.9.2';
 const HOLD_SECONDS = 1.5;
 
 /* ---------------- UI helpers ---------------- */
@@ -437,7 +437,7 @@ async function createNewKC(kcType) {
     equipment_labels: [],
     baseline_checklist: [],
     interruption_threshold_minutes: 30,
-    voice_window_seconds: 15,
+    voice_window_seconds: 5,
     steps: []
   };
   if (kcType === 'product_instructions') {

@@ -288,7 +288,11 @@ export async function runSession(ctx, resumeState = null) {
        voice window; when it closes, press-and-hold is the only confirmation.
        The app never speaks again on its own: long steps (e.g. S07) proceed at
        the operator's discretion without audible interruptions. ----- */
-    const voiceWindowS = kc.voice_window_seconds || 15;
+    /* Capped at 5s: Android kills a silent recognition session after ~5s with
+       an unavoidable system chime, so a longer window only buys chime-and-
+       restart cycles that also pause any playing video. Existing KC docs still
+       say 15 — the cap here fixes them all without touching the database. */
+    const voiceWindowS = Math.min(kc.voice_window_seconds || 5, 5);
 
     const result = await new Promise((resolve) => {
       const status = document.createElement('div');
@@ -410,9 +414,13 @@ export async function runSession(ctx, resumeState = null) {
           onStateChange: (on) => {
             status.classList.toggle('listening', on);
             // The window starts when the mic is actually live for the first
-            // time, so a permission prompt doesn't eat into the 15 seconds.
+            // time, so a permission prompt doesn't eat into the window.
             if (on && !armed) { armed = true; rearmVoiceWindow(); }
-          }
+          },
+          // Android ended the session on its own (~5s of silence) — the window
+          // closes with it rather than restarting the mic (each restart chimes
+          // and pauses video).
+          onSessionEnd: () => closeVoiceWindow()
         });
         listener.start();
       } else {

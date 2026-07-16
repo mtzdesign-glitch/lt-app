@@ -42,8 +42,9 @@ export function matchesCallout(transcript, keywords) {
   return keywords.every((k) => t.includes(' ' + k.toLowerCase() + ' '));
 }
 
-/* Listens continuously for a callout while active.
-   callbacks: onMatch(transcript), onReject(transcript), onUnavailable(reason), onStateChange(listening) */
+/* Listens for a callout — one recognition session per voice window.
+   callbacks: onMatch(transcript), onReject(transcript), onUnavailable(reason),
+   onStateChange(listening), onSessionEnd() when the session ends on its own */
 export class VoiceListener {
   constructor(keywords, callbacks) {
     this.keywords = keywords;
@@ -105,9 +106,13 @@ export class VoiceListener {
 
     rec.onend = () => {
       this.cb.onStateChange && this.cb.onStateChange(false);
+      // No auto-restart: Android ends a silent session after ~5s and plays its
+      // system chime on every start/stop — restarting would chime again and
+      // pause any playing video. The voice window lives and dies with this one
+      // session; only an operator action (REPLAY → resume) opens another.
       if (this.active && !this.suspended) {
-        // restart shortly; recognition sessions time out on silence
-        setTimeout(() => this._spin(), 250);
+        this.rec = null;
+        this.cb.onSessionEnd && this.cb.onSessionEnd();
       }
     };
 
