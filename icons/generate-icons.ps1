@@ -1,50 +1,45 @@
-# Generates the Tacillon app icons (192, 512, and maskable 512) using built-in Windows drawing (GDI+).
-# No external software required.
+# Regenerates the app icon set from the official Tacillon logo.
+# Source: C:\LT\Tacillo_logo_only.png (founder-provided, 2026-07-14).
+# Output: icon-192.png (favicon + apple-touch), icon-512.png,
+#         icon-maskable-512.png (logo shrunk into Android's 80% safe zone,
+#         padded with the logo's own background color).
+# Uses built-in Windows drawing (GDI+), no external software required.
 
 Add-Type -AssemblyName System.Drawing
 
-$outDir = "C:\LT\app\icons"
-New-Item -ItemType Directory -Force $outDir | Out-Null
+$here = Split-Path -Parent $MyInvocation.MyCommand.Path
+$srcPath = 'C:\LT\Tacillo_logo_only.png'
+if (-not (Test-Path $srcPath)) { throw "Logo source not found: $srcPath" }
 
-$specs = @(
-    @{ Size = 192; File = 'icon-192.png';          Pad = 0.0  },
-    @{ Size = 512; File = 'icon-512.png';          Pad = 0.0  },
-    @{ Size = 512; File = 'icon-maskable-512.png'; Pad = 0.18 }
-)
+$src = [System.Drawing.Bitmap]::FromFile($srcPath)
+$bg = $src.GetPixel(2, 2)   # pad with the logo's own background color
+$side = [Math]::Min($src.Width, $src.Height)
+$cropX = [int](($src.Width - $side) / 2)
+$cropY = [int](($src.Height - $side) / 2)
 
-foreach ($spec in $specs) {
-    $s = $spec.Size
-
-    $bmp = New-Object System.Drawing.Bitmap($s, $s)
-    $g = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.SmoothingMode = 'AntiAlias'
-    $g.TextRenderingHint = 'AntiAliasGridFit'
-
-    # Dark background matching the app theme
-    $g.Clear([System.Drawing.ColorTranslator]::FromHtml('#0b0f14'))
-
-    # "T" mark, centered, in the app accent blue
-    $inner = $s * (1 - 2 * $spec.Pad)
-    $fontSize = [int]($inner * 0.52)
-    $font = New-Object System.Drawing.Font('Segoe UI', $fontSize, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
-    $brush = New-Object System.Drawing.SolidBrush([System.Drawing.ColorTranslator]::FromHtml('#37b6ff'))
-
-    $fmt = New-Object System.Drawing.StringFormat
-    $fmt.Alignment = 'Center'
-    $fmt.LineAlignment = 'Center'
-
-    $rect = New-Object System.Drawing.RectangleF(0, 0, $s, $s)
-    $g.DrawString('T', $font, $brush, $rect, $fmt)
-
-    # Thin square frame around the text
-    $penWidth = [Math]::Max(2, $s * 0.015)
-    $pen = New-Object System.Drawing.Pen([System.Drawing.ColorTranslator]::FromHtml('#37b6ff'), $penWidth)
-    $m = $s * ($spec.Pad + 0.10)
-    $g.DrawRectangle($pen, $m, $m, $s - 2 * $m, $s - 2 * $m)
-
-    $g.Dispose()
-    $bmp.Save((Join-Path $outDir $spec.File), [System.Drawing.Imaging.ImageFormat]::Png)
-    $bmp.Dispose()
-
-    Write-Output ("Created " + $spec.File)
+function New-Icon([int]$size, [double]$logoScale, [string]$name) {
+  $bmp = New-Object System.Drawing.Bitmap($size, $size)
+  $g = [System.Drawing.Graphics]::FromImage($bmp)
+  $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+  $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+  $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+  $g.Clear($script:bg)
+  $target = [int]($size * $logoScale)
+  $off = [int](($size - $target) / 2)
+  $destRect = New-Object System.Drawing.Rectangle($off, $off, $target, $target)
+  $srcRect = New-Object System.Drawing.Rectangle($script:cropX, $script:cropY, $script:side, $script:side)
+  $g.DrawImage($script:src, $destRect, $srcRect, [System.Drawing.GraphicsUnit]::Pixel)
+  $g.Dispose()
+  $out = Join-Path $here $name
+  $bmp.Save($out, [System.Drawing.Imaging.ImageFormat]::Png)
+  $bmp.Dispose()
+  Write-Output "wrote $out ($size x $size)"
 }
+
+New-Icon 192 1.0 'icon-192.png'
+New-Icon 512 1.0 'icon-512.png'
+# Full-bleed for maskable too: the logo art carries its own margin around the
+# mark, and padding with a flat color leaves a visible seam against the logo's
+# textured background. Android's circle/squircle masks keep the mark visible.
+New-Icon 512 1.0 'icon-maskable-512.png'
+$src.Dispose()
