@@ -11,7 +11,7 @@ import { runBuilder } from './builder.js';
 import { runPublicManual, runManualViewer, sectionsOf } from './manual.js';
 import { runPublishScreen } from './publish.js';
 
-const APP_VERSION = '0.9.3';
+const APP_VERSION = '0.9.4';
 const HOLD_SECONDS = 1.5;
 
 /* ---------------- UI helpers ---------------- */
@@ -205,7 +205,17 @@ async function boot() {
 
   wireStatic();
 
+  /* Arriving from a password-reset email: supabase-js reads the recovery
+     token out of the URL and fires this during (or just after) getSession.
+     The flag stops the normal boot path from stomping the reset screen. */
+  let recoveryMode = false;
+  backend.onPasswordRecovery(() => {
+    recoveryMode = true;
+    show('screen-resetpw');
+  });
+
   const session = await backend.getSession();
+  if (recoveryMode) return;
   if (!session) { setAuthMode('login'); show('screen-auth'); return; }
   await enterProfileScreen();
 }
@@ -266,6 +276,35 @@ async function submitAuth() {
         ? 'Too many confirmation emails were sent in the last hour. Wait an hour and try again — or use CONTINUE WITH GOOGLE, which needs no email.'
         : m || 'Could not reach the server. Check the connection.',
       'bad');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* ---------------- set new password (from reset email) ---------------- */
+
+function resetPwMsg(text, cls = '') {
+  const el = document.getElementById('resetpw-msg');
+  el.textContent = text;
+  el.className = 'auth-msg' + (cls ? ' ' + cls : '');
+}
+
+async function submitNewPassword() {
+  const pw = document.getElementById('resetpw-password').value;
+  if (pw.length < 6) { resetPwMsg('The password must be at least 6 characters.', 'bad'); return; }
+  const btn = document.getElementById('btn-resetpw-save');
+  btn.disabled = true;
+  resetPwMsg('Working…');
+  try {
+    await backend.updatePassword(pw);
+    document.getElementById('resetpw-password').value = '';
+    resetPwMsg('');
+    await modal('Password updated. You are logged in.', ['OK']);
+    await enterProfileScreen();
+  } catch (e) {
+    resetPwMsg(/should be different/i.test(e.message || '')
+      ? 'That is already the current password — choose a different one.'
+      : (e.message || 'Could not reach the server. Check the connection.'), 'bad');
   } finally {
     btn.disabled = false;
   }
@@ -518,6 +557,38 @@ function wireStatic() {
     const showing = pw.type === 'text';
     pw.type = showing ? 'password' : 'text';
     document.getElementById('btn-pw-toggle').textContent = showing ? 'SHOW' : 'HIDE';
+  });
+  document.getElementById('btn-forgot-pw').addEventListener('click', async () => {
+    const email = document.getElementById('auth-email').value.trim();
+    if (!email) {
+      authMsg('Type the account email in the Email box above, then tap FORGOT PASSWORD again.', 'bad');
+      return;
+    }
+    const btn = document.getElementById('btn-forgot-pw');
+    btn.disabled = true;
+    authMsg('Working…');
+    try {
+      await backend.resetPassword(email);
+      authMsg('Reset email sent to ' + email + ' — check the inbox (and spam). The link in it brings you back here to set a new password.', 'ok');
+    } catch (e) {
+      authMsg(/rate limit/i.test(e.message || '')
+        ? 'Too many emails were sent in the last hour. Wait an hour and try again.'
+        : (e.message || 'Could not reach the server. Check the connection.'), 'bad');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  document.getElementById('btn-resetpw-toggle').addEventListener('click', () => {
+    const pw = document.getElementById('resetpw-password');
+    const showing = pw.type === 'text';
+    pw.type = showing ? 'password' : 'text';
+    document.getElementById('btn-resetpw-toggle').textContent = showing ? 'SHOW' : 'HIDE';
+  });
+  document.getElementById('btn-resetpw-save').addEventListener('click', submitNewPassword);
+  document.getElementById('btn-resetpw-cancel').addEventListener('click', async () => {
+    /* The recovery link already signed them in — cancelling just skips the
+       password change and carries on into the app. */
+    await enterProfileScreen();
   });
   document.getElementById('btn-auth-google').addEventListener('click', async () => {
     authMsg('Opening Google sign-in…');

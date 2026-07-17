@@ -41,6 +41,28 @@
       <div id="auth-msg" class="auth-msg"></div>
       <button id="btn-auth-submit" class="btn btn-primary btn-big">LOG IN</button>
       <button id="btn-auth-toggle" class="btn btn-secondary">NEW HERE? CREATE AN ENTERPRISE ACCOUNT</button>
+      <button id="btn-forgot-pw" class="btn btn-tertiary">FORGOT PASSWORD?</button>
+    </div>
+  </section>
+
+  <!-- ============ SET NEW PASSWORD (arrived from reset email) ============ -->
+  <section id="screen-resetpw" class="screen">
+    <header class="home-header">
+      <h1 class="app-title">TACILLON</h1>
+    </header>
+    <div class="auth-wrap">
+      <h2>SET A NEW PASSWORD</h2>
+      <p class="screen-sub">You arrived here from a password-reset email. Choose the new password for the enterprise account.</p>
+      <div class="field">
+        <label for="resetpw-password">New password <span class="label-hint">(at least 6 characters)</span></label>
+        <div class="pw-row">
+          <input id="resetpw-password" type="password" minlength="6" autocomplete="new-password">
+          <button id="btn-resetpw-toggle" type="button" class="pw-toggle">SHOW</button>
+        </div>
+      </div>
+      <div id="resetpw-msg" class="auth-msg"></div>
+      <button id="btn-resetpw-save" class="btn btn-primary btn-big">SAVE NEW PASSWORD</button>
+      <button id="btn-resetpw-cancel" class="btn btn-tertiary">CANCEL — KEEP CURRENT PASSWORD</button>
     </div>
   </section>
 

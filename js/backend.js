@@ -88,6 +88,29 @@ export async function signOut() {
   await client.auth.signOut();
 }
 
+/* Emails a password-reset link. The link lands back on the app, where
+   supabase-js reads the recovery token out of the URL and fires the
+   PASSWORD_RECOVERY event (see onPasswordRecovery). */
+export async function resetPassword(email) {
+  const { error } = await client.auth.resetPasswordForEmail(email, {
+    redirectTo: location.origin + location.pathname
+  });
+  if (error) throw error;
+}
+
+export async function updatePassword(newPassword) {
+  const { error } = await client.auth.updateUser({ password: newPassword });
+  if (error) throw error;
+}
+
+/* Fires when the app is opened from a password-reset email link — the
+   recovery session is already active; the user just needs to set a password. */
+export function onPasswordRecovery(cb) {
+  client.auth.onAuthStateChange((event) => {
+    if (event === 'PASSWORD_RECOVERY') cb();
+  });
+}
+
 /* ---------------- enterprise + profiles ---------------- */
 
 export function getEnterprise() {

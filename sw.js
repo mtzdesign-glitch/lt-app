@@ -2,7 +2,7 @@
    Strategy: pre-cache the shell; cache-first for shell assets;
    video clips are NETWORK ONLY (too large to pre-cache; brief allows it). */
 
-const CACHE_NAME = 'tacillon-shell-v23';
+const CACHE_NAME = 'tacillon-shell-v24';
 
 const SHELL = [
   './',
