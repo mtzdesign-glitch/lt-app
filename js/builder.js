@@ -515,7 +515,7 @@ function equipmentForm(onDone, existing = null) {
 
   els.body.innerHTML = `
     <div class="gate-heading">${existing ? 'Edit equipment' : 'New equipment'}</div>
-    <div class="screen-sub">Captured once — reusable in any step of any KC.</div>
+    <div class="screen-sub">Captured once — reusable in any step of any guide.</div>
     <div class="field">
       <label>Photo</label>
       <img id="e-thumb" class="eq-thumb" hidden alt="equipment photo">
@@ -648,7 +648,7 @@ function equipmentForm(onDone, existing = null) {
     const used = (state.doc.steps || []).filter((s) => s.equipment_id === existing.id).length;
     const sure = await state.ctx.ui.modal(
       used > 0
-        ? `Delete "${existing.name}"? ${used} step${used === 1 ? '' : 's'} in this KC use${used === 1 ? 's' : ''} it — they will keep their text but lose the equipment link. This cannot be undone.`
+        ? `Delete "${existing.name}"? ${used} step${used === 1 ? '' : 's'} in this guide use${used === 1 ? 's' : ''} it — they will keep their text but lose the equipment link. This cannot be undone.`
         : `Delete "${existing.name}" from the equipment library? This cannot be undone.`,
       ['KEEP IT', 'DELETE EQUIPMENT']);
     if (sure !== 1) return;

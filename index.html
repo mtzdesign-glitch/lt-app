@@ -82,18 +82,18 @@
   <section id="screen-library" class="screen">
     <header class="bar">
       <button id="btn-switch-profile" class="btn btn-back">&#8592; PROFILE</button>
-      <h2>KC LIBRARY</h2>
+      <h2>GUIDE LIBRARY</h2>
     </header>
     <div class="screen-sub" id="library-sub"></div>
     <div id="library-offline" class="offline-note" hidden>Offline — showing the last saved copy of the library.</div>
     <div id="kc-list" class="kc-list"></div>
     <div class="stack-actions">
-      <div class="screen-sub" style="padding-bottom:0;">Create a new KC:</div>
-      <button id="btn-new-procedure" class="btn btn-primary">+ PROCEDURE KC</button>
-      <button id="btn-new-dangerous" class="btn btn-primary">+ DANGEROUS EQUIPMENT / SYSTEMS KC</button>
-      <button id="btn-new-product" class="btn btn-primary">+ PRODUCT MANUAL KC</button>
-      <button id="btn-import-sample" class="btn btn-secondary">ADD SAMPLE KC — POOL CLEANING</button>
-      <button id="btn-ledger" class="btn btn-tertiary">SESSION LEDGER</button>
+      <div class="screen-sub" style="padding-bottom:0;">Create a new Guide:</div>
+      <button id="btn-new-product" class="btn btn-primary btn-left">+ PRODUCT USER GUIDE</button>
+      <button id="btn-new-procedure" class="btn btn-primary btn-left">+ PROCEDURE GUIDE</button>
+      <button id="btn-new-dangerous" class="btn btn-hrp btn-left">+ HIGH RISK PROCEDURE (HRP) GUIDE</button>
+      <button id="btn-import-sample" class="btn btn-secondary">ADD SAMPLE PROCEDURE GUIDE — POOL CLEANING</button>
+      <button id="btn-ledger" class="btn btn-tertiary">AUDIT TRAIL</button>
     </div>
   </section>
 
@@ -113,8 +113,8 @@
       <button id="btn-view-manual" class="btn btn-primary btn-big" hidden>VIEW MANUAL</button>
       <button id="btn-publish-kc" class="btn btn-secondary btn-big" hidden>PUBLISH &amp; QR CODE</button>
       <button id="btn-build-steps" class="btn btn-secondary">BUILD STEPS</button>
-      <button id="btn-rename-kc" class="btn btn-tertiary">RENAME THIS KC</button>
-      <button id="btn-delete-kc" class="btn btn-danger-ghost">DELETE THIS KC</button>
+      <button id="btn-rename-kc" class="btn btn-tertiary">RENAME THIS GUIDE</button>
+      <button id="btn-delete-kc" class="btn btn-danger-ghost">DELETE THIS GUIDE</button>
     </div>
     <footer class="home-footer" id="home-status"></footer>
   </section>
@@ -155,7 +155,7 @@
       <div class="blocked-icon">&#9632;</div>
       <h2 id="blocked-title">SESSION BLOCKED</h2>
       <p id="blocked-reason"></p>
-      <p class="blocked-note">This event has been recorded in the session ledger.</p>
+      <p class="blocked-note">This event has been recorded in the audit trail.</p>
       <button id="btn-blocked-home" class="btn btn-secondary btn-big">RETURN HOME</button>
     </div>
   </section>
@@ -197,11 +197,11 @@
   <section id="screen-ledger" class="screen">
     <header class="bar">
       <button class="btn btn-back" data-back>&#8592; BACK</button>
-      <h2>SESSION LEDGER</h2>
+      <h2>AUDIT TRAIL</h2>
     </header>
     <div class="ledger-actions">
-      <button id="btn-export" class="btn btn-primary">EXPORT LEDGER (lt-ledger.json)</button>
-      <button id="btn-verify" class="btn btn-secondary">VERIFY LEDGER INTEGRITY</button>
+      <button id="btn-export" class="btn btn-primary">EXPORT AUDIT TRAIL (lt-ledger.json)</button>
+      <button id="btn-verify" class="btn btn-secondary">VERIFY AUDIT TRAIL INTEGRITY</button>
       <button id="btn-delete-history" class="btn btn-danger-ghost">DELETE HISTORY</button>
       <div id="verify-result" class="verify-result"></div>
     </div>

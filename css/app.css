@@ -71,6 +71,11 @@ html, body {
   color: var(--text-dim); background: transparent;
 }
 .btn-danger-ghost { background: transparent; border-color: var(--danger); color: var(--danger); }
+.btn-left { text-align: left; }
+/* High Risk Procedure (HRP) create button: warning treatment, built like
+   btn-primary (dim fill + accent border) but on the existing --warn amber,
+   so the button color matches the critical-step color used in sessions. */
+.btn-hrp { background: #5e451a; border-color: var(--warn); }
 .btn[disabled] { opacity: 0.4; pointer-events: none; }
 
 /* ---------- home ---------- */

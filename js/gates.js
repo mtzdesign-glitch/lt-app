@@ -11,7 +11,7 @@ const FITNESS_DECLARATIONS = [
   'This equipment has not been flagged as out of service, damaged, or compromised by any person in this organization.',
   'This equipment has received the required maintenance clearance from an authorized person for this type of operation.',
   'I am not aware of any condition, fault, or anomaly in this equipment that has not been formally reported and cleared.',
-  'If this session involves repair or diagnostic work on compromised equipment, I confirm the appropriate repair KC is selected and I am authorized to perform repair operations.'
+  'If this session involves repair or diagnostic work on compromised equipment, I confirm the appropriate repair guide is selected and I am authorized to perform repair operations.'
 ];
 
 function attestationText(orgName) {
@@ -323,6 +323,6 @@ export async function runGates(ctx) {
     await ledger.append('gate_baseline_confirm', { session_id: sessionId, detail: { item } });
   }
 
-  await speak('All gates passed. Knowledge container loading.');
+  await speak('All gates passed. Guide loading.');
   return { passed: true };
 }

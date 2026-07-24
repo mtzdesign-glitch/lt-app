@@ -11,7 +11,7 @@ import { runBuilder } from './builder.js';
 import { runPublicManual, runManualViewer, sectionsOf } from './manual.js';
 import { runPublishScreen } from './publish.js';
 
-const APP_VERSION = '0.9.5';
+const APP_VERSION = '0.9.6';
 const HOLD_SECONDS = 1.5;
 
 /* ---------------- UI helpers ---------------- */
@@ -151,10 +151,17 @@ const ctx = {
 
 let libraryRows = [];     // last-loaded KC library rows (id, kc_type, title, doc, updated_at)
 
+/* Display names only — keys are the kc_type database values and must never change. */
 const KC_TYPE_LABELS = {
-  procedure: 'PROCEDURE',
-  dangerous_equipment: 'DANGEROUS EQUIPMENT / SYSTEMS',
-  product_instructions: 'PRODUCT MANUAL'
+  procedure: 'PROCEDURE GUIDE',
+  dangerous_equipment: 'HIGH RISK PROCEDURE (HRP) GUIDE',
+  product_instructions: 'PRODUCT USER GUIDE'
+};
+/* Sentence-case variants for use inside prose (dialogs, prompts). */
+const KC_TYPE_NAMES = {
+  procedure: 'Procedure Guide',
+  dangerous_equipment: 'High Risk Procedure (HRP) Guide',
+  product_instructions: 'Product User Guide'
 };
 
 function escapeHtml(s) {
@@ -426,7 +433,7 @@ function renderLibrary() {
     libraryRows.some((r) => r.doc && r.doc.kc_id === SAMPLE_KC_ID);
   const wrap = document.getElementById('kc-list');
   wrap.innerHTML = libraryRows.length === 0
-    ? '<p class="screen-sub">No knowledge containers yet. Create one, or add the sample to explore.</p>'
+    ? '<p class="screen-sub">No guides yet. Create one, or add the sample to explore.</p>'
     : '';
   for (const row of libraryRows) {
     const d = document.createElement('div');
@@ -471,7 +478,7 @@ function renderKcHome() {
 }
 
 async function createNewKC(kcType) {
-  const name = await modalInput(`Name for the new ${KC_TYPE_LABELS[kcType].toLowerCase()} KC:`);
+  const name = await modalInput(`Name for the new ${KC_TYPE_NAMES[kcType]}:`);
   if (!name || !name.trim()) return;
   const doc = {
     kc_id: 'KC-' + Date.now().toString(36).toUpperCase(),
@@ -496,7 +503,7 @@ async function createNewKC(kcType) {
     renderLibrary();
     openKC(row);
   } catch {
-    await modal('Could not create the KC — check the connection and try again.', ['OK']);
+    await modal('Could not create the guide — check the connection and try again.', ['OK']);
   }
 }
 
@@ -511,7 +518,7 @@ async function importSampleKC() {
     libraryRows.push(row);
     renderLibrary();
   } catch {
-    await modal('Could not add the sample KC — check the connection and try again.', ['OK']);
+    await modal('Could not add the sample guide — check the connection and try again.', ['OK']);
   } finally {
     btn.disabled = false;
   }
@@ -521,7 +528,7 @@ async function deleteOpenKC() {
   const steps = (ctx.kc.steps || []).length;
   const sure = await modal(
     `Delete "${ctx.kc.title}" (${steps} step${steps === 1 ? '' : 's'}) from the library? Its videos are removed too. This affects everyone in the enterprise and cannot be undone.`,
-    ['CANCEL', 'DELETE KC']);
+    ['CANCEL', 'DELETE GUIDE']);
   if (sure !== 1) return;
   try {
     await backend.deleteKC(ctx.kcRef.id);
@@ -537,7 +544,7 @@ async function deleteOpenKC() {
 }
 
 async function renameOpenKC() {
-  const name = await modalInput('New name for this KC:', ctx.kc.title);
+  const name = await modalInput('New name for this guide:', ctx.kc.title);
   if (!name || !name.trim() || name.trim() === ctx.kc.title) return;
   try {
     const doc = { ...ctx.kc, title: name.trim() };
@@ -620,7 +627,7 @@ function wireStatic() {
     }
   });
   document.getElementById('btn-logout').addEventListener('click', async () => {
-    const sure = await modal('Log out of this enterprise? The session ledger stays on this phone.', ['CANCEL', 'LOG OUT']);
+    const sure = await modal('Log out of this enterprise? The audit trail stays on this phone.', ['CANCEL', 'LOG OUT']);
     if (sure !== 1) return;
     await backend.signOut();
     location.reload();
@@ -715,7 +722,7 @@ function wireStatic() {
       if (pick === 2) return;
     } else {
       const pick = await modal(
-        'Delete all ledger history from this phone? Exported files are not affected. This cannot be undone.',
+        'Delete all audit trail history from this phone? Exported files are not affected. This cannot be undone.',
         ['CANCEL', 'DELETE HISTORY']);
       if (pick === 0) return;
     }
@@ -906,7 +913,7 @@ async function resolveIncompleteSession() {
      ledger context; if it is no longer in the library, closure is the only path. */
   const kcRow = kcRowForSession(inc.session_id);
   if (!kcRow) {
-    await modal('A previous session was interrupted during the pre-session gates, and its KC is no longer in this library. It must be closed out with a recorded reason.', ['RECORD REASON']);
+    await modal('A previous session was interrupted during the pre-session gates, and its guide is no longer in this library. It must be closed out with a recorded reason.', ['RECORD REASON']);
     const r = await chooseClosureReason(ui);
     await appendSessionClosed(ctx.ledger, {
       session_id: inc.session_id, step_id: inc.step_id, closed_from: 'resume_prompt',

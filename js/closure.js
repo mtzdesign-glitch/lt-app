@@ -21,7 +21,7 @@ export async function chooseClosureReason(ui, { allowCancel = false, heading } =
   if (allowCancel) labels.push('CANCEL — DO NOT END SESSION');
   for (;;) {
     const pick = await ui.modal(
-      heading || 'This session is ending before completion. The reason will be recorded in the ledger:',
+      heading || 'This session is ending before completion. The reason will be recorded in the audit trail:',
       labels
     );
     if (allowCancel && pick === CLOSURE_OPTIONS.length) return null;

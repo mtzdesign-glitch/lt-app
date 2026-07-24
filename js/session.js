@@ -509,7 +509,7 @@ export async function runSession(ctx, resumeState = null) {
           <div class="critical-banner safety">ABORT — ABNORMAL CONDITION</div>
           <div class="step-title">Stop this session</div>
           <p class="step-instruction">Select the condition you observed. The session ends immediately
-          and the abort is recorded in the ledger. An aborted procedure cannot be resumed —
+          and the abort is recorded in the audit trail. An aborted procedure cannot be resumed —
           it must restart from step 1 once the condition is resolved.</p>
         </div>
         <div id="abort-actions" style="display:flex;flex-direction:column;gap:12px;"></div>
@@ -703,7 +703,7 @@ export async function runSession(ctx, resumeState = null) {
       body.innerHTML = `
         <div class="step-card">
           <div class="step-title">Go to a different step</div>
-          <p class="step-instruction">Select the step to continue from. The jump is recorded in the ledger. Guidance resumes at the selected step.</p>
+          <p class="step-instruction">Select the step to continue from. The jump is recorded in the audit trail. Guidance resumes at the selected step.</p>
         </div>
         <div id="jump-list" style="display:flex;flex-direction:column;gap:8px;"></div>
         <div id="jump-actions" style="display:flex;flex-direction:column;gap:10px;"></div>
